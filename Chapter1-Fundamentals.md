@@ -1,80 +1,78 @@
 # 第二章: Vert.x 异步编程的基础知识
 
-The first step toward building reactive systems is to adopt asynchronous programming. Traditional programming models based on blocking I/O do not scale as well as those that use non-blocking I/O. Serving more requests with fewer resources is very appealing, so where’s the catch? There is indeed a little problem: asynchronous programming is a non-trivial paradigm shift if you have never been exposed to it!  
+构建反应式系统的第一步是采用异步编程。基于阻塞I/O的传统编程模型的可伸缩性不如使用非阻塞I/O的模型。用更少的资源服务更多的请求是非常有吸引力的，那么问题在哪里呢?这里确实存在一个小问题:如果您从未接触过异步编程，那么它是一种重要的范式转换!
 
-The chapters in this part of the book will teach you the fundamental concepts of asynchronous programming by using the Vert.x toolkit. Thinking in
-asynchronous operations is definitely approachable (and fun!) with Vert.x, and we will explore the main building blocks of a Vert.x application.  
+本书这部分的章节将通过使用Vert.x工具包教你异步编程的基本概念。使用Vert.x思考异步操作绝对是可行的(而且很有趣!)，我们将探讨Vert.x应用程序的主要构建块。
 
-**This chapter covers**
-- What Vert.x is
-- Why distributed systems cannot be avoided
-- The challenges in programming resource-efficient networked applications
--  What asynchronous and non-blocking programming is
-- What a reactive application is, and why asynchronous programming is not enough
-- Alternatives to Vert.x
+**本章涵盖了**
 
-We developers live in an industry of buzzwords, technologies, and practices hype cycles. I have long taught university students the elements of designing, programming, integrating, and deploying applications, and I have witnessed first-hand how complicated it can be for newcomers to navigate the wild ocean of current technologies.
+- Vert.x 是什么
+- 为什么不能避免分布式系统
+- 编程资源高效的网络应用程序的挑战
+- 什么是异步和非阻塞编程
+- 什么是响应式应用程序，以及为什么异步编程还不够
+- Vert.x 的替代品
 
-`Asynchronous` and `reactive` are important topics in modern applications, and my goal with this book is to help developers understand the core concepts behind these terms, gain practical experience, and recognize when there are benefits to these approaches. We will use Eclipse Vert.x, a toolkit for writing asynchronous applications that has the added benefit of providing solutions for the different definitions of what “reactive” means.
+我们开发人员生活在一个充满流行语、技术和实践炒作周期的行业。 我长期教大学生设计、编程、集成和部署应用程序的要素，我亲眼目睹了新手在当前技术的狂野海洋中航行是多么复杂。
 
-Ensuring that you understand the concepts is a priority for me in this book. While I want to give you a solid understanding of how to write Vert.x applications, I also want to make sure that you can translate the skills you learn here to other similar and possibly competing technologies, now or five years down the road.
+`Asynchronous` 和 `reactive` 是现代应用程序中的重要主题，我编写本书的目标是帮助开发人员理解这些术语背后的核心概念，获得实践经验，并认识到这些方法何时有好处。 我们将使用 Eclipse Vert.x，这是一个用于编写异步应用程序的工具包，它具有为“reactive(反应式)”含义的不同定义提供解决方案的额外好处。
 
-## 1.1 Being distributed and networked is the norm
+在本书中，确保你理解这些概念是我的首要任务。 虽然我想让您深入了解如何编写 Vert.x 应用程序，但我还想确保您可以将在这里学到的技能转化为现在或五年后的其他类似和可能竞争的技术。
 
-It was common 20 years ago to deploy business applications that could perform all operations while running isolated on a single machine. Such applications typically exhibited a graphical user interface, and they had local databases or custom file management for storing data. This is, of course, a gross exaggeration, as networking was already in use, and business applications could take advantage of database servers over the network, networked file storage, and various remote code operations.
+## 1.1 分布式和网络化是常态
 
-Today, an application is more naturally exposed to end users through web and mobile interfaces. This naturally brings the network into play, and hence distributed sys- tems. Also, *service-oriented architectures* allow the reuse of some functionality by issuing requests to other services, possibly controlled by a third-party provider. Examples would be delegating authentication in a consumer application to popular account providers like Google, Facebook, or Twitter, or delegating payment processing to Stripe or PayPal.
+20 年前，部署可以在单台机器上独立运行的同时执行所有操作的业务应用程序很常见。 此类应用程序通常展示图形用户界面，并且它们具有用于存储数据的本地数据库或自定义文件管理。 当然，这有点夸张，因为网络已经在使用中，并且业务应用程序可以利用网络上的数据库服务器、网络文件存储和各种远程代码操作。
 
-## 1.2 Not living on an isolated island
+如今，应用程序更自然地通过 Web 和移动界面向最终用户公开。 这自然会使网络发挥作用，从而使分布式系统发挥作用。 此外，*面向服务的架构*允许通过向其他服务发出请求来重用某些功能，这些服务可能由第三方提供商控制。 例如，将消费者应用程序中的身份验证委托给流行的帐户提供商，如 Google、Facebook 或 Twitter，或者将支付处理委托给 Stripe 或 PayPal。
 
-Figure 1.1 is a fictional depiction of what a modern application is: a set of networked services interacting with each other. Here are some of these networked services:
+## 1.2 不是住在孤岛上
 
-  - A database like PostgreSQL or MongoDB stores data.
-  - A search engine like Elasticsearch allows finding information that was previ- ously indexed, such as products in a catalog.
-  - A durable storage service like Amazon S3 provides persistent and replicated data storage of documents.
-  - A messaging service can be
-    + An SMTP server to programmatically send emails.
-    + A bot for interacting with users over messaging platforms, such as Slack, Tele- gram, or Facebook Messenger.
-    + An integration messaging protocol for application-to-application integra- tion, like AMQP.
- - An identity management service like Keycloak provides authentication and role management for user and service interactions.
+图 1.1 是对现代应用程序的虚构描述：一组相互交互的网络服务。 以下是其中一些网络服务：
 
-Monitoring with libraries like Micrometer exposes health statuses, metrics, and logs so that external orchestration tools can maintain proper quality of service, possibly by starting new service instances or killing existing ones when they fail.
+  - 像 PostgreSQL 或 MongoDB 这样的数据库存储数据。
+  - 像 Elasticsearch 这样的搜索引擎允许查找以前编入索引的信息，例如目录中的产品。
+  - 像 Amazon S3 这样的持久存储服务提供文档的持久和复制数据存储。
+  - 消息服务可以是
+    + 以编程方式发送电子邮件的 SMTP 服务器。
+    + 用于通过消息平台（例如 Slack、Telegram 或 Facebook Messenger）与用户交互的机器人。
+    + 用于应用程序到应用程序集成的集成消息传递协议，如 AMQP。
+ - 像 Keycloak 这样的身份管理服务为用户和服务交互提供身份验证和角色管理。
+
+使用 Micrometer 等库进行监控会公开健康状态、指标和日志，以便外部编排工具可以保持适当的服务质量，可能通过启动新服务实例或在失败时终止现有服务实例。
 
 ![](Chapter1-Fundamentals.assets/Figure_1_1.png)
 
-Later in this book you will see examples of typical services such as API endpoints, stream processors, and edge services. The preceding list is not exhaustive, of course, but the key point is that services rarely live in isolation, as they need to talk to other services over the network to function.
+在本书的后面部分，您将看到典型服务的示例，例如 API 端点、流处理器和边缘服务。 当然，前面的列表并不详尽，但关键是服务很少独立存在，因为它们需要通过网络与其他服务通信才能运行。
 
-## 1.3 There is no free lunch on the network
+## 1.3 网络上没有免费的午餐
 
-The network is exactly where a number of things may go wrong in computing:
+网络正是计算中可能出现许多问题的地方：
 
-  - The bandwidth can fluctuate a lot, so data-intensive interactions between ser- vices may suffer. Not all services can enjoy fast bandwidth inside the same data center, and even so, it remains slower than communications between processes on the same machine.
+  - 带宽波动很大，因此服务之间的数据密集型交互可能会受到影响。 并非所有服务都可以在同一数据中心内享受快速带宽，即便如此，它仍然比同一台机器上的进程之间的通信慢。
 
-  - The latency fluctuates a lot, and because services need to talk to services that talk to additional services to process a given request, all network-induced latency adds to the overall request-processing times.
+  - 延迟波动很大，并且由于服务需要与其他服务对话以处理给定请求的服务，所有网络引起的延迟都会增加整体请求处理时间。
 
-  - Availability should not be taken for granted: Networks fail. Routers fail. Proxies fail. Sometimes someone runs into a network cable and disconnects it. When the network fails, a service that sends a request to another service may not be able to determine if it is the other service or the network that is down.
+  - 可用性不应被视为理所当然：网络失败。 路由器出现故障。 代理失败。 有时有人碰到网线并断开它。 当网络发生故障时，向另一个服务发送请求的服务可能无法确定是其他服务还是网络故障。
 
-In essence, modern applications are made of distributed and networked services. They are accessed over networks that themselves introduce problems, and each ser- vice needs to maintain several incoming and outgoing connections.
+从本质上讲，现代应用程序是由分布式和网络化服务组成的。 它们是通过本身引入问题的网络访问的，并且每个服务都需要维护多个传入和传出连接。
 
-## 1.4 The simplicity of blocking APIs
+## 1.4 阻塞 API 的简单性
 
-Services need to manage connections to other services and requesters. The traditional and widespread model for managing concurrent network connections is to allocate a thread for each connection. This is the model in many technologies, such as Servlets in Jakarta EE (before additions in version 3), Spring Framework (before additions in version 5), Ruby on Rails, Python Flask, and many more. This model has the advan- tage of simplicity, as it is *synchronous*.
+服务需要管理与其他服务和请求者的连接。 管理并发网络连接的传统且广泛使用的模型是为每个连接分配一个线程。 这是许多技术中的模型，例如 Jakarta EE 中的 Servlet（在版本 3 中添加之前）、Spring Framework（在版本 5 中添加之前）、Ruby on Rails、Python Flask 等等。 该模型具有简单的优点，因为它是*同步的*。
 
-Let’s look at an example where a TCP server echoes input text back to the client until it sees a /quit terminal input (shown in listing 1.3).
+让我们看一个例子，TCP 服务器将输入文本回显给客户端，直到它看到 `/quit` 终端输入（如清单 1.3 所示）。
 
-The server can be run using the Gradle run task from the book’s full example proj-
-
-ect (`./gradlew run -PmainClass=chapter1.snippets.SynchronousEcho` in a termi- nal). By using the `netcat` command-line tool, we can send and receive text.
+服务器可以使用本书完整示例项目中的 Gradle 运行任务（终端中的`./gradlew run -PmainClass=chapter1.snippets.SynchronousEcho`）运行。 通过使用 `netcat` 命令行工具，我们可以发送和接收文本。
 
 ![](Chapter1-Fundamentals.assets/Listing_1_1.png)
 
-> **TIP** You may need to install netcat (or nc) on your operating system.
+> **💡提示:** 您可能需要在操作系统上安装 netcat（或 nc）。
 
-On the server side, we can see the following trace.
+在服务器端，我们可以看到以下跟踪。
 
 ![](Chapter1-Fundamentals.assets/Listing_1_2.png)
 
-The code in the following listing provides the TCP server implementation. It is a clas- sical use of the `java.io` package that provides synchronous I/O APIs.
+以下清单中的代码提供了 TCP 服务器实现。 它是提供同步 I/O API 的`java.io`包的经典用法。
 
 ![](Chapter1-Fundamentals.assets/Listing_1_3.png)
 
@@ -125,31 +123,31 @@ public class SynchronousEcho {
 >
 ><3>: 写入套接字也可能会阻塞，例如直到底层 TCP 缓冲区数据已通过网络发送。
 
-The server uses the main thread for accepting connections, and each connection is allocated a new thread for processing I/O. The I/O operations are synchronous, so threads may block on I/O operations.
+服务器使用主线程接受连接，并为每个连接分配一个新线程来处理 I/O。 I/O 操作是同步的，因此线程可能会阻塞 I/O 操作。
 
-## 1.5 Blocking APIs waste resources, increase costs
+## 1.5 阻塞API浪费资源，增加成本
 
-The main problem with the code in listing 1.3 is that it allocates a new thread for each incoming connection, and threads are anything but cheap resources. A thread needs memory, and the more threads you have, the more you put pressure on the operating system kernel scheduler, as it needs to give CPU time to the threads. We could improve the code in listing 1.3 by using a thread pool to reuse threads after a connection has been closed, but we still need *n* threads for *n* connections at any given point in time.
+**清单 1.3** 中代码的主要问题是它为每个传入连接分配一个新线程，而线程绝不是廉价资源。 线程需要内存，线程越多，对操作系统内核调度程序施加的压力就越大，因为它需要给线程分配 CPU 时间。 我们可以改进**清单 1.3** 中的代码，通过使用线程池在连接关闭后重用线程，但在任何给定时间点我们仍然需要 *n* 个线程来处理 *n* 个连接。
 
-This is illustrated in figure 1.2, where you can see the CPU usage over time of three threads for three concurrent network connections. Input/output operations such as `readLine` and `write` may *block* the thread, meaning that it is being parked by the oper- ating system. This happens for two reasons:
-  - A read operation may be waiting for data to arrive from the network.
-  - A write operation may have to wait for buffers to be drained if they are full from a previous write operation.
+如图 1.2 所示，您可以在其中看到三个并发网络连接的三个线程的 CPU 使用率随时间变化。 诸如`readLine`和`write`之类的输入/输出操作可能会**阻塞**线程，这意味着它正被操作系统悬停。 发生这种情况有两个原因：
+  - 读取操作可能正在等待数据从网络到达。
+  - 如果缓冲区因先前的写入操作已满，则写入操作可能必须等待缓冲区被耗尽。
 
-A modern operating system can properly deal with a few thousand concurrent threads. Not every networked service will face loads with so many concurrent requests,
+现代操作系统可以正确处理几千个并发线程。 并非每个联网服务都会面临如此多并发请求的负载，
 
 ![image-20220527153804390](Chapter1-Fundamentals.assets/Figure_1_2.png)
 
-but this model quickly shows its limits when we are talking about tens of thousands of concurrent connections.
+但是当我们谈论数以万计的并发连接时，这个模型很快就显示出它的局限性。
 
-It is also important to recall that we often need more threads than incoming net- work connections. To take a concrete example, suppose that we have an HTTP service that offers the best price for a given product, which it does by requesting prices from four other HTTP services, as illustrated in figure 1.3. This type of service is often
+同样重要的是要记住，我们通常需要比传入网络连接更多的线程。 举一个具体的例子，假设我们有一个 HTTP 服务，它为给定的产品提供最优惠的价格，它通过向其他四个 HTTP 服务请求价格来做到这一点，如**图 1.3** 所示。 这种服务通常
 
 ![image-20220527154029412](Chapter1-Fundamentals.assets/Figure_1_3.png)
 
 称为*边缘服务*或*API网关*。 按顺序请求每个服务然后选择最低价格会使我们的服务变得非常慢，因为每个请求都会增加我们自己服务的延迟。 有效的方法是从我们的服务启动四个并发请求，然后等待并收集它们的响应。 这意味着再启动四个线程； 如果我们有 1,000 个并发网络请求，我们可能会使用多达 5,000 个线程，在最糟糕的情况下，所有请求都需要同时处理，并且我们不使用线程池或维护来自边缘服务的持久连接 请求的服务。
 
-Last, but not least, applications are often deployed to containerized or virtualized environments. This means that applications may not see all the available CPU cores, and their allocated CPU time may be limited. Available memory for processes may also be restricted, so having too many threads also eats into the memory budget. Such applications have to share CPU resources with other applications, so if all applications use blocking I/O APIs, there can quickly be too many threads to manage and sched- ule, which requires starting more server/container instances as traffic ramps up. This translates directly to increased operating costs.
+最后但同样重要的是，应用程序通常部署到容器化或虚拟化环境中。 这意味着应用程序可能无法看到所有可用的 CPU 内核，并且它们分配的 CPU 时间可能会受到限制。 进程的可用内存也可能受到限制，因此线程过多也会占用内存预算。 此类应用程序必须与其他应用程序共享 CPU 资源，因此如果所有应用程序都使用阻塞 I/O API，很快就会有太多线程需要管理和调度，这需要随着流量的增加启动更多服务器/容器实例。 这直接转化为增加的运营成本。
 
-## 1.6 Asynchronous programming with non-blocking I/O
+## 1.6 使用非阻塞 I/O 进行异步编程
 
 Instead of waiting for I/O operations to complete, we can shift to *non-blocking* I/O. You may have already sampled this with the select function in C.
 
