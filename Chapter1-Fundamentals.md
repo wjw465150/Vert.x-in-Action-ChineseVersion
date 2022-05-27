@@ -149,160 +149,154 @@ public class SynchronousEcho {
 
 ## 1.6 使用非阻塞 I/O 进行异步编程
 
-Instead of waiting for I/O operations to complete, we can shift to *non-blocking* I/O. You may have already sampled this with the select function in C.
+不用等待I/O操作完成，我们可以切换到非阻塞的I/O。你可能已经在C语言中使用了' select '函数。
 
-The idea behind non-blocking I/O is to request a (blocking) operation, and move
+非阻塞I/O背后的思想是请求一个(阻塞)操作，然后继续执行其他任务，直到操作结果准备好。例如，一个非阻塞的读取可能会通过网络套接字请求最多256个字节，执行线程会做其他事情(比如处理另一个连接)，直到数据被放入缓冲区，准备在内存中使用。在此模型中，许多并发连接可以在单个线程上复用，因为网络延迟通常超过读取传入字节所需的CPU时间。
 
-on to doing other tasks until the operation result is ready. For example a non-blocking read may ask for up to 256 bytes over a network socket, and the execution thread does other things (like dealing with another connection) until data has been put into the buffers, ready for consumption in memory. In this model, many concurrent connec- tions can be multiplexed on a single thread, as network latency typically exceeds the CPU time it takes to read incoming bytes.
-
-Java has long had the java.nio (Java NIO) package, which offers non-blocking I/O APIs over files and networks. Going back to our previous example of a TCP ser- vice that echoes incoming data, listings 1.4 through 1.7 show a possible implementa- tion with Java non-blocking I/O.
+Java 长期以来一直有 `java.nio` (Java NIO) 包，它通过文件和网络提供非阻塞 I/O API。 回到我们之前回显传入数据的 TCP 服务示例，清单 1.4 到 1.7 显示了使用 Java 非阻塞 I/O 的参考实现。
 
 ![image-20220527154418444](Chapter1-Fundamentals.assets/Listing_1_4.png)
 
-Listing 1.4 shows the server socket channel preparation code. It opens the server socket channel and makes it non-blocking, then registers an NIO key selector for pro- cessing events. The main loop iterates over the selector keys that have events ready for processing and dispatches them to specialized methods depending on the event type (new connections, data has arrived, or data can be sent again).
+**清单 1.4** 显示了服务器套接字通道准备代码。 它打开服务器套接字通道并使其成为非阻塞的，然后注册一个 NIO 键选择器来处理事件。 主循环遍历已准备好处理事件的选择器键，并根据事件类型（新连接、数据已到达或可以再次发送数据）将它们分派给专门的方法。
 
 ![image-20220527154620560](Chapter1-Fundamentals.assets/Listing_1_5.png)
 
-Listing 1.5 shows how new TCP connections are dealt with. The socket channel that corresponds to the new connection is configured as non-blocking and then is tracked for further reference in a hash map, where it is associated to some *context object*. The context depends on the application and protocol. In our case, we track the current line and whether the connection is closing, and we maintain a connection-specific NIO buffer for reading and writing data.
+**清单 1.5** 展示了如何处理新的 TCP 连接。 对应于新连接的套接字通道被配置为非阻塞，然后在哈希映射中被跟踪以供进一步参考，其中它与某个*上下文对象*相关联。 上下文取决于应用程序和协议。 在我们的例子中，我们跟踪当前行以及连接是否正在关闭，并且我们维护一个连接特定的 NIO 缓冲区用于读取和写入数据。
 
 ![image-20220527154718266](Chapter1-Fundamentals.assets/Listing_1_6.png)
 
-Listing 1.6 has the code for the echo method. The processing is very simple: we read data from the client socket, and then we attempt to write it back. If the write operation was only partial, we stop further reads, declare interest in knowing when the socket channel is writable again, and then ensure all data is written.
+**清单 1.6** 包含 `echo` 方法的代码。 处理非常简单：我们从客户端套接字读取数据，然后尝试将其写回。 如果写操作只是部分，我们停止进一步的读取，声明有兴趣知道套接字通道何时再次可写，然后确保写入所有数据。
 
 ![image-20220527154921138](Chapter1-Fundamentals.assets/Listing_1_7.png)
 
-Finally, listing 1.7 shows the methods for closing the TCP connection and for finishing writing a buffer. When all data has been written in continueEcho, we register interest again in reading data.
+最后，**清单 1.7** 显示了关闭 TCP 连接和完成写入缓冲区的方法。 当所有数据都写入 `continueEcho` 时，我们再次注册读取数据的兴趣。
 
-As this example shows, using non-blocking I/O is doable, but it significantly increases the code complexity compared to the initial version that used blocking APIs. The echo protocol needs two states for reading and writing back data: reading, or fin- ishing writing. For more elaborate TCP protocols, you can easily anticipate the need for more complicated state machines.
+如本例所示，使用非阻塞 I/O 是可行的，但与使用阻塞 API 的初始版本相比，它显着增加了代码复杂性。 回显协议需要两种状态来读取和写回数据：读取或完成写入。 对于更复杂的 TCP 协议，您可以轻松预测对更复杂状态机的需求。
 
-It is also important to note that like most JDK APIs, java.nio focuses solely on what it does (here, I/O APIs). It does not provide higher-level protocol-specific help- ers, like for writing HTTP clients and servers. Also, java.nio does not prescribe a threading model, which is still important to properly utilize CPU cores, nor does it handle asynchronous I/O events or articulate the application processing logic.
+同样重要的是要注意，与大多数 JDK API 一样，`java.nio` 只关注它的作用（这里是 I/O API）。 它不提供更高级别的特定于协议的帮助程序，例如用于编写 HTTP 客户端和服务器。 此外，`java.nio` 没有规定线程模型，这对于正确利用 CPU 内核仍然很重要，也没有处理异步 I/O 事件或阐明应用程序处理逻辑。
 
->  **🏷注意:** This is why, in practice, developers rarely deal with Java NIO. Network- ing libraries like Netty and Apache MINA solve the shortcomings of Java NIO, and many toolkits and frameworks are built on top of them. As you will soon discover, Eclipse Vert.x is one of them.
+>  **🏷注意:** 这就是为什么在实践中，开发人员很少处理 Java NIO。 Netty 和 Apache MINA 等网络库解决了 Java NIO 的缺点，许多工具包和框架都建立在它们之上。 您很快就会发现，Eclipse Vert.x 就是其中之一。
 
-## 1.7 Multiplexing event-driven processing: The case of the event loop
+## 1.7 多路复用事件驱动处理：事件循环的案例
 
-A popular threading model for processing asynchronous events is that of the event loop. Instead of polling for events that may have arrived, as we did in the previous Java NIO example, events are pushed to an *event loop*.
+用于处理异步事件的流行线程模型是事件循环。 不像我们在前面的 Java NIO 示例中所做的那样轮询可能已经到达的事件，而是将事件推送到一个*事件循环*中。
 
 ![image-20220527155141864](Chapter1-Fundamentals.assets/Figure_1_4.png)
 
-As you can see in figure 1.4, events are queued as they arrive. They can be I/O events, such as data being ready for consumption or a buffer having been fully written to a socket. They can also be any *other* event, such as a timer firing. A single thread is assigned to an event loop, and processing events shouldn’t perform any blocking or long-running operation. Otherwise, the thread blocks, defeating the purpose of using an event loop.
+正如您在**图 1.4** 中看到的，事件在到达时会排队。 它们可以是 I/O 事件，例如准备好使用的数据或已完全写入套接字的缓冲区。 它们也可以是任何 *其它* 事件，例如计时器触发。 将单个线程分配给事件循环，处理事件不应执行任何阻塞或长时间运行的操作。 否则，线程阻塞，违背了使用事件循环的目的。
 
-Event loops are quite popular: JavaScript code running in web browsers runs on top of an event loop. Many graphical interface toolkits, such as Java Swing, also have an event loop.
+事件循环非常流行：在 Web 浏览器中运行的 JavaScript 代码运行在事件循环之上。 许多图形界面工具包，例如 Java Swing，也有一个事件循环。
 
-Implementing an event loop is easy.
+实现事件循环很容易。
 
 ![image-20220527155602740](Chapter1-Fundamentals.assets/Listing_1_8.png)
 
-The code in listing 1.8 shows the use of an event-loop API whose execution gives the following console output.
+**清单 1.8** 中的代码显示了事件循环 API 的使用，其执行提供了以下控制台输出。
 
 ![image-20220527155702905](Chapter1-Fundamentals.assets/Listing_1_9.png)
 
-More sophisticated event-loop implementations are possible, but the one in the fol- lowing listing relies on a queue of events and a map of handlers.
+更复杂的事件循环实现是可能的，但下面清单中的实现依赖于事件队列和处理程序映射。
 
 ![image-20220527155826507](Chapter1-Fundamentals.assets/Listing_1_10.png)
 
-The event loop runs on the thread that calls the run method, and events can be safely sent from other threads using the `dispatch` method.
+事件循环在调用 run 方法的线程上运行，并且可以使用 `dispatch` 方法从其他线程安全地发送事件。
 
-Last, but not least, an event is simply a pair of a key and data, as shown in the fol- lowing, which is a static inner class of `EventLoop`.
+最后但同样重要的是，事件只是一对键和数据，如下所示，它是`EventLoop`的静态内部类。
 
 ![image-20220527160000452](Chapter1-Fundamentals.assets/Listing_1_11.png)
 
-## 1.8 What is a reactive system?
+## 1.8 什么是反应式系统？
 
-So far we have discussed how to do the following:
-  - Leverage asynchronous programming and non-blocking I/O to handle more concurrent connections and use less threads
-  - Use one threading model for asynchronous event processing (the event loop)
+到目前为止，我们已经讨论了如何执行以下操作：
+  - 利用异步编程和非阻塞 I/O 来处理更多的并发连接并使用更少的线程
+  - 使用一种线程模型进行异步事件处理（事件循环）
 
-By combining these two techniques, we can build scalable and resource-efficient appli- cations. Let’s now discuss what a *reactive system* is and how it goes beyond “just” asyn- chronous programming.
+通过结合这两种技术，我们可以构建可扩展且资源高效的应用程序。 现在让我们讨论一下什么是*反应式系统*，以及它如何超越“单纯的”异步编程。
 
-The four properties of reactive systems are exposed in *The Reactive Manifesto*: *respon- sive*, *resilient*, *elastic*, and *message-driven* ([www.reactivemanifesto.org/](http://www.reactivemanifesto.org/)). We are not going to paraphrase the manifesto in this book, so here is a brief take on what these proper- ties are about:
-  - *Elastic*—Elasticity is the ability for the application to work with a variable num- ber of instances. This is useful, as elasticity allows the app to respond to traffic spikes by starting new instances and load-balancing traffic across instances. This has an interesting impact on the code design, as shared state across instancesneeds to be well identified and limited (e.g., server-side web sessions). It is use- ful for instances to report *metrics*, so that an orchestrator can decide when to start or stop instances based on both network traffic and reported metrics.
-  - *Resilient*—Resiliency is partially the flip side of elasticity. When one instance crashes in a group of elastic instances, resiliency is naturally achieved by redi- recting traffic to other instances, and a new instance can be started if necessary. That being said, there is more to resiliency. When an instance cannot fulfill a request due to some conditions, it still tries to answer in *degraded mode*. Depend- ing on the application domain, it may be possible to respond with older cached values, or even to respond with empty or default data. It may also be possible to forward a request to some other, non-error instance. In the worst case, an instance can respond with an error, but in a timely fashion.
-  - *Responsive*—Responsivity is the result of combining elasticity and resiliency. Consistent response times provide strong service-level agreement guarantees. This is achieved both thanks to the ability to start new instances if need be (to keep response times acceptable), and also because instances still respond quickly when errors arise. It is important to note that responsivity is not possible if one component relies on a non-scalable resource, like a single central data- base. Indeed, starting more instances does not solve the problem if they all issue requests to one resource that is quickly going to be overloaded.
-  - *Message-driven* —Using asynchronous message passing rather than blocking par- adigms like remote procedure calls is the key enabler of elasticity and resiliency, which lead to responsiveness. This also enables messages to be dispatched to more instances (making the system elastic) and controls the flow between mes- sage producers and message consumers (this is *back-pressure*, and we will explore it later in this book).
+响应式系统的四个属性在 *The Reactive Manifesto* 中公开：*responsive*、*resilient*、*elastic* 和 *message-driven* ([www.reactivemanifesto.org/](http://www .reactivemanifesto.org/))。 我们不打算在这本书中解释这一宣言，所以这里简要介绍一下这些属性的含义：
+  - *弹性*—弹性是应用程序处理可变数量实例的能力。 这很有用，因为弹性允许应用程序通过启动新实例和跨实例负载平衡流量来响应流量峰值。 这对代码设计产生了有趣的影响，因为需要很好地识别和限制跨实例的共享状态（例如，服务器端 Web 会话）。 实例报告 *metrics* 很有用，这样编排器可以根据网络流量和报告的指标来决定何时启动或停止实例。
+  - *回弹力* -回弹力部分是弹性的另一面。当一组弹性实例中的一个实例崩溃时，可以通过将流量重定向到其他实例来实现弹性，并且可以在必要时启动一个新实例。话虽如此，弹性还有更多。当一个实例由于某些条件不能满足请求时，它仍然尝试以*降级模式*响应。根据应用程序域的不同，可以使用较旧的缓存值进行响应，甚至可以使用空数据或默认数据进行响应。也可以将请求转发到其他非错误实例。在最坏的情况下，实例可以及时响应错误。
+  - *响应性*—响应性是弹性和回弹力相结合的结果。 一致的响应时间提供了强大的服务水平协议保证。 这要归功于能够在需要时启动新实例（以保持可接受的响应时间），并且还因为实例在出现错误时仍能快速响应。 重要的是要注意，如果一个组件依赖于不可扩展的资源，比如单个中央数据库，那么响应性是不可能的。 事实上，如果它们都向一个很快就会过载的资源发出请求，那么启动更多实例并不能解决问题。
+  - *消息驱动*——使用异步消息传递而不是像远程过程调用这样的阻塞范式是弹性和回弹力的关键推动因素，从而导致响应能力。 这也使消息能够被分派到更多实例（使系统具有弹性）并控制消息生产者和消息消费者之间的流动（这是*背压*，我们将在本书后面进行探讨）。
 
-A reactive system exhibits these four properties, which make for dependable and resource-efficient systems.
+反应式系统表现出这四个属性，它们构成了可靠且资源高效的系统。
 
-**Does asynchronous imply reactive?**
+**异步是否意味着响应式？**
 
-This is an important question, as being asynchronous is often presented as being a magic cure for software woes. Clearly, reactive implies asynchronous, but the con- verse is not necessarily true.
+这是一个重要的问题，因为异步通常被认为是解决软件问题的灵丹妙药。 显然，反应式意味着异步，但反过来不一定正确。
 
-As a (not so) fictitious example, consider a shopping web application where users can put items in a shopping cart. This is classically done by storing items in a server-side web session. When sessions are being stored in memory or in local files, the system is not reactive, even if it internally uses non-blocking I/O and asynchronous program- ming. Indeed, an instance of the application cannot take over another one because sessions are application state, and in this case that state is not being replicated and shared across nodes.
+作为一个（并非如此）虚构的例子，考虑一个购物 Web 应用程序，用户可以在其中将商品放入购物车。 这通常是通过将项目存储在服务器端 Web 会话中来完成的。 当会话存储在内存或本地文件中时，系统不是反应式的，即使它在内部使用非阻塞 I/O 和异步编程。 实际上，应用程序的一个实例不能接管另一个应用程序，因为会话是应用程序状态，在这种情况下，该状态不会在节点之间复制和共享。
 
-A reactive variant of this example would use a memory grid service (e.g., Hazelcast, Redis, or Infinispan) to store the web sessions, so that incoming requests could be routed to any instance.
+此示例的反应式变体将使用内存网格服务（例如，Hazelcast、Redis 或 Infinispan）来存储 Web 会话，以便可以将传入请求路由到任何实例。
 
-## 1.9 What else does reactive mean?
+## 1.9 反应式还有什么意思？
 
-As *reactive* is a trendy term, it is also being used for very different purposes. You just saw what a *reactive system* is, but there are two other popular reactive definitions, sum- marized in table 1.1.
+由于 *reactive* 是一个流行的术语，它也被用于非常不同的目的。 您刚刚看到了什么是*反应式系统*，但还有另外两个流行的反应式定义，总结在表 1.1 中。
 
-**Table 1.1 All the reactive things**
+**表 1.1 所有的反应性事物**
 
-| **Reactive?** | **Description**                                              |
+| **反应式?** | **描述**                                              |
 | ------------- | ------------------------------------------------------------ |
-| Systems       | Dependable applications that are message-driven, resilient, elastic, and responsive. |
-| Programming   | A means of reacting to changes and events. Spreadsheet programs are a great example of reactive programming: when cell data changes, cells having formulas depending on affected cells are recomputed automatically. Later in this book you will see RxJava, a pop- ular *reactive extensions* API for Java that greatly helps coordinate asynchronous event and data processing. There is also *functional reactive programming*, a style of programming that we won’t cover in this book but for which *Functional Reactive Programming* by Stephen Blackheath and Anthony Jones (Manning, 2016) is a fantastic resource. |
-| Streams       | When systems exchange continuous streams of data, the classical producer/consumer problems arise. It is especially important to provide *back-pressure* mechanisms so that a consumer can notify a producer when it is emitting too fast. With reactive streams |
+| 系统  | 消息驱动、回弹、弹性和响应式的可靠应用程序。 |
+| 程序设计 | 对变化和事件做出反应的一种方式。 电子表格程序是反应式编程的一个很好的例子：当单元格数据发生变化时，具有取决于受影响单元格的公式的单元格会自动重新计算。 在本书的后面部分，您将看到 RxJava，一个流行的 Java 反应式扩展 API，它极大地帮助协调异步事件和数据处理。 还有*函数响应式编程*，这是我们不会在本书中介绍的一种编程风格，但 Stephen Blackheath 和 Anthony Jones 的*函数响应式编程*（Manning，2016 年）是一个极好的资源。 |
+| 流       | 当系统交换连续的数据流时，就会出现经典的生产者/消费者问题。 提供*背压*机制尤其重要，这样消费者可以在发射速度过快时通知生产者。 对于反应式流 (www.reactive-streams.org)，主要目标是在系统之间达到最佳吞吐量。 |
 
-## 1.10 What is Vert.x?
+## 1.10 Vert.x 是什么？
 
-According to the Vert.x website (https://vertx.io/), “Eclipse Vert.x is a tool-kit for building reactive applications on the JVM.”
+根据 Vert.x 网站 (https://vertx.io/)的介绍，“Eclipse Vert.x 是一个用于在 JVM 上构建反应式应用程序的工具包。”
 
-Initiated by Tim Fox in 2012, Vert.x is a project now fostered at the vendor-neutral Eclipse Foundation. While the first project iterations were aimed at being a “Node.js for the JVM,” Vert.x has since significantly deviated toward providing an asynchronous programming foundation tailored for the specifics of the JVM.
+Vert.x 由 Tim Fox 于 2012 年发起，现在是供应商中立的 Eclipse 基金会培育的一个项目。 虽然第一个项目迭代的目标是成为“JVM 里的 Node.js”，但Vert.x已经明显地偏离了为JVM的细节提供异步编程基础的方向。
 
-**The essence of Vert.x**
+**Vert.x 的精髓**
 
-As you may have guessed from the previous sections of this chapter, the focus of Vert.x is processing asynchronous events, mostly coming from non-blocking I/O, and the threading model processes events in an event loop.
+正如您可能从本章前面的部分中猜到的那样，Vert.x 的重点是处理异步事件，主要来自非阻塞 I/O，线程模型在事件循环中处理事件。
 
-It is very important to understand that Vert.x is a *toolkit* and not a *framework*: it does not provide a predefined foundation for your application, so you are free to use Vert.x as a library inside a larger code base. Vert.x is largely unopinionated on the build tools that you should be using, how you want to structure your code, how you intend to package and deploy it, and so on. A Vert.x application is an assembly of modules pro- viding exactly what you need, and nothing more. If you don’t need to access a data- base, then your project does not need to depend on database-related APIs.
+了解 Vert.x 是一个 *工具包* 而不是 *框架* 非常重要：它不为您的应用程序提供预定义的基础，因此您可以自由地将 Vert.x 用作更大代码库中的库 . Vert.x 在很大程度上对您应该使用的构建工具、您希望如何构建代码、您打算如何打包和部署它等等没有意见。 Vert.x 应用程序是一个模块组合，提供您真正需要的东西，仅此而已。 如果您不需要访问数据库，那么您的项目就不需要依赖与数据库相关的 API。
 
-The Vert.x project is organized in composable modules, with figure 1.5 showing the structure of a random Vert.x application:
-  - A core project, called vertx-core, provides the APIs for asynchronous pro- gramming, non-blocking I/O, streaming, and convenient access to networked protocols such as TCP, UDP, DNS, HTTP, or WebSockets.
-  - A set of modules that are part of the community-supported Vert.x stack, such as a better web API (vertx-web) or data clients (vertx-kafka-client, vertx-redis, vertx-mongo, etc.) provide functionality for building all kinds of applications.
-  - A wider ecosystem of projects provides even more functionality, such as con- necting with Apache Cassandra, non-blocking I/O to communicate between system processes, and so on.
+Vertx项目组织在可组合的模块中，**图 1.5** 显示了随机 Vert.x 应用程序的结构：
+  - 一个名为 *vertx-core* 的 *core* 项目提供了用于异步编程、非阻塞 I/O、流式传输以及方便地访问 TCP、UDP、DNS、HTTP 或 WebSockets 等网络协议的 API。
+  - 一组模块，它们是社区支持的 Vert.x 堆栈的一部分，例如更好的 Web API (*vertx-web*) 或数据客户端 (*vertx-kafka-client*、*vertx-redis*、*vertx -mongo* 等）提供构建各种应用程序的功能。
+  - 更广泛的项目生态系统提供了更多功能，例如与 Apache Cassandra 连接、非阻塞 I/O 以在系统进程之间进行通信等等。
 
 ![image-20220527160932294](Chapter1-Fundamentals.assets/Figure_1_5.png)
 
-Vert.x is *polyglot* as it supports most of the popular JVM languages: JavaScript, Ruby, Kotlin, Scala, Groovy, and more. Interestingly, these languages are not just supported through their interoperability with Java. Idiomatic bindings are being generated, so you can write Vert.x code that still feels natural in these languages. For example, the Scala bindings use the Scala future APIs, and the Kotlin bindings leverage custom DSLs and functions with named parameters to simplify some code constructs. And, of course, you can mix and match different supported languages within the same Vert.x application.
+Vert.x 是 *多种语言的*，因为它支持大多数流行的 JVM 语言：JavaScript、Ruby、Kotlin、Scala、Groovy 等。 有趣的是，这些语言不仅仅通过它们与 Java 的互操作性得到支持。 正在生成惯用绑定，因此您可以编写在这些语言中仍然感觉自然的 Vert.x 代码。 例如，Scala 绑定使用 Scala future 的 API，而 Kotlin 绑定利用自定义 DSL 和具有命名参数的函数来简化一些代码结构。 当然，您可以在同一个 Vert.x 应用程序中混合和匹配不同的支持语言。
 
-## 1.11 Your first Vert.x application
+## 1.11 你的第一个 Vert.x 应用程序
 
-It’s finally time for us to write a Vert.x application!
+终于到了我们编写 Vert.x 应用程序的时候了！
 
-Let’s continue with the echo TCP protocol that we have used in various forms in this chapter. It will still expose a TCP server on port 3000, where any data is sent back to the client. We will add two other features:
-  - The number of open connections will be displayed every five seconds.
-  - An HTTP server on port 8080 will respond with a string giving the current num- ber of open connections.
+让我们继续我们在本章中以各种形式使用的 echo TCP 协议。 它仍然会在端口 3000 上公开 TCP 服务器，任何数据都将在此处发送回客户端。 我们将添加另外两个功能：
+  - 打开的连接数将每五秒显示一次。
+  - 端口 8080 上的 HTTP 服务器将响应一个字符串，给出当前打开的连接数。
 
-### 1.11.1 Preparing the project
+### 1.11.1 准备项目
 
-While not strictly necessary for this example, it is easier to use a build tool. In this book, I will show examples with Gradle, but you can find the equivalent Maven build descriptors in the book’s source code Git repository.
+虽然对于此示例不是绝对必要的，但使用构建工具更容易。 在本书中，我将展示使用 Gradle 的示例，但您可以在本书的源代码 Git 存储库中找到等效的 Maven 构建描述符。
 
-For this project, the only third-party dependency that we need is the vertx-core artifact plus its dependencies. This artifact is on Maven Central under the io.vertx group identifier.
+对于这个项目，我们唯一需要的第三方依赖是 *vertx-core* 工件加上它的依赖。 该工件位于 Maven Central 上的 *io.vertx* 组标识符下。
 
-An integrated development environment (IDE) like IntelliJ IDEA Community Edi- tion is great, and it knows how to create Maven and Gradle projects. You can equally use Eclipse, NetBeans, or even Visual Studio Code.
+像 IntelliJ IDEA Community Edition 这样的集成开发环境 (IDE) 非常棒，它知道如何创建 Maven 和 Gradle 项目。 您同样可以使用 Eclipse、NetBeans 甚至 Visual Studio Code。
 
->  **TIP** You can also use the Vert.x starter web application at [https://start.vertx.io ](https://start.vertx.io/)and generate a project skeleton to download.
+>  **💡提示:** 您还可以在 [https://start.vertx.io ](https://start.vertx.io/) 使用 `Vert.x starter web application`并生成项目框架以供下载。
 
-For this chapter let’s use Gradle. A suitable build.gradle.kts file would look like the next listing.
+对于本章，让我们使用 Gradle。 一个合适的 `build.gradle.kts` 文件如下所示。
 
 ![image-20220527161309007](Chapter1-Fundamentals.assets/Listing_1_12.png)
 
-> **TIP** You may be more familiar with Apache Maven than Gradle. This book uses Gradle because it is a modern, efficient, and flexible build tool. It also uses a concise domain-specific language for writing build files, which works better than Maven XML files in the context of a book. You will find Maven build descriptors equivalent to those of Gradle in the source code Git repository.
+> **💡提示:** 对于Gradle 您可能更熟悉 Apache Maven。 本书使用 Gradle 是因为它是一种现代、高效且灵活的构建工具。 它还使用一种简洁的领域特定语言来编写构建文件，在书的上下文中它比 Maven XML 文件效果更好。 您将在源代码 Git 存储库中找到与 Gradle 等效的 Maven 构建描述符。
 
-### 1.11.2 The VertxEcho class
+### 1.11.2 VertxEcho 类
 
-The *VertxEcho* class implementation is shown in listing 1.15. You can run the applica- tion with Gradle using the run task (*gradle run* or *./gradlew run*), as follows.
+*Vertex Echo* 类的实现如**清单 1.15** 所示。 您可以使用运行任务（*gradle run* 或 *./gradlew run*）通过 Gradle 运行应用程序，如下所示。![image-20220527161459706](Chapter1-Fundamentals.assets/Listing_1_13.png)
 
-![image-20220527161459706](Chapter1-Fundamentals.assets/Listing_1_13.png)
+> **💡提示:** 如果您更喜欢 Maven，请从本书源代码 Git 存储库的 chapter1 文件夹中运行 *mvn compile exec:java* 而不是 *./gradlew run*。
 
-> **TIP** If you prefer Maven, run mvn compile exec:java instead of ./gradlew run from the chapter1 folder in the book’s source code Git repository.
+当然，您可以使用 `netcat` 命令与服务交互以回显文本，并且可以发出 HTTP 请求以查看打开的连接数，如下面的清单所示。![image-20220527161603404](Chapter1-Fundamentals.assets/Listing_1_14.png)
 
-You can, of course, interact with the service with the netcat command to echo text, and you can make an HTTP request to see the number of open connections, as shown in the following listing.
+>  **💡提示:** http 命令来自位于 [httpie.org](https://httpie.org/) 的 `HTTPie` 项目。 此工具是 `curl` 的开发人员友好替代品，您可以轻松地将其安装在您的操作系统上。
 
-![image-20220527161603404](Chapter1-Fundamentals.assets/Listing_1_14.png)
-
->  **TIP** The http command comes from the HTTPie project at [https://](https://httpie.org/) [httpie.org](https://httpie.org/). This tool is a developer-friendly alternative to curl, and you can easily install it on your operating system.
-
-Let’s now see the code of `VertxEcho`.
+现在让我们看看 `VertxEcho` 的代码。
 
 ![image-20220527162403459](Chapter1-Fundamentals.assets/Listing_1_15.png)
 
@@ -347,39 +341,39 @@ public class VertxEcho {
 }
 ```
 
-> <1>: As you will see in the next chapter, event handlers are always executed on the same thread, so there is no need for JVM locks or using AtomicInteger.
+> <1>: 正如您将在下一章中看到的，事件处理程序总是在同一个线程上执行，因此不需要 JVM 锁或使用 `AtomicInteger`。
 >
-> <2>: Creating a TCP server requires passing a callback for each new connection.
+> <2>: 创建TCP服务器需要为每个新连接传递回调函数。
 >
-> <3>: This defines a periodic task with a callback being executed every five seconds.
+> <3>: 这定义了一个周期性任务，每五秒执行一次回调函数。
 >
-> <4>: Similar to a TCP server, an HTTP server is configured by giving the callback to be executed for each HTTP request.
+> <4>: 与 TCP 服务器类似，通过为每个 HTTP 请求提供要执行的回调函数来配置 HTTP 服务器。
 >
-> <5>: The buffer handler is invoked every time a buffer is ready for consumption. Here we just write it back, and we use a convenient string conversion helper to look for a terminal command.
+> <5>: 每次缓冲区准备使用时都会调用缓冲区处理程序。这里我们只是将它写回，并使用一个方便的字符串转换助手来查找终端命令。
 >
-> <6>: Another event is when the connection closes. We decrement a connections counter that was incremented upon connection.
+> <6>: 另一个事件是连接关闭时。我们递减连接计数器，该计数器在连接时递增。
 
-This example is interesting in that it has few lines of code. It is centered around a plain old Java main method, because there is no framework to bootstrap. All we need to create is a Vertx context, which in turns offers methods to create tasks, servers, cli- ents, and more, as you will discover in the next chapters.
+这个例子很有趣，因为它只有几行代码。 它以普通的Java `main` 方法为中心，因为没有可引导的框架。 我们需要创建的只是一个 *Vertx* 上下文，它反过来提供了创建任务、服务器、客户端等的方法，正如您将在下一章中发现的那样。
 
-While it’s not apparent here, an event loop is managing the processing of events, be it a new TCP connection, the arrival of a buffer, a new HTTP request, or a periodic task that is being fired. Also, every event handler is being executed on the same (event-loop) thread.
+虽然在这里并不明显，但事件循环正在管理事件的处理，无论是新的 TCP 连接、缓冲区的到达、新的 HTTP 请求还是正在触发的周期性任务。 此外，每个事件处理程序都在同一个（事件循环）线程上执行。
 
-### 1.11.3 The role of callbacks
+### 1.11.3 回调函数的作用
 
-As you just saw in listing 1.15, *callbacks* are the primary method Vert.x uses to notify the application code of asynchronous events and pass them to some handlers. Combined with lambda expressions in Java, callbacks make for a concise way to define event handling.
+正如您在清单 1.15 中看到的，*callbacks(回调)* 是 Vert.x 用于通知应用程序代码异步事件并将它们传递给某些处理程序的主要方法。 结合 Java 中的 lambda 表达式，回调为定义事件处理提供了一种简洁的方式。
 
-You may have heard or experienced the infamous *callback hell* where callbacks get nested into callbacks, leading to code that is difficult to read and reason about.
+您可能听说过或经历过臭名昭著的**回调地狱**，回调嵌套在回调中，导致代码难以阅读和推理。
 
 ![image-20220527163209979](Chapter1-Fundamentals.assets/Listing_1_16.png)
 
-Be reassured: although the Vert.x core APIs indeed use callbacks, Vert.x provides sup- port for more programming models. Callbacks are the canonical means for notifica- tion in event-driven APIs, but as you will see in upcoming chapters, it is possible to build other abstractions on top of callbacks, such as futures and promises, reactive extensions, and coroutines.
+请放心：虽然 Vert.x 核心 API 确实使用回调，但 Vert.x 提供了对更多编程模型的支持。 回调是事件驱动 API 中通知的规范方法，但正如您将在接下来的章节中看到的那样，可以在回调之上构建其他抽象，例如futures 和 promises、反应式扩展和协程。
 
-While callbacks have their issues, there are many cases with minimal levels of nesting where they remain a very good programming model with minimal dispatch overhead.
+虽然回调有它们的问题，但在许多情况下，当嵌套层次很少时少，它们仍然是一个非常好的编程模型，调度开销最小。
 
-### 1.11.4 So is this a reactive application?
+### 1.11.4 那么这是一个反应式应用程序吗？
 
-This is a very good question to ask. It is important to remember that while Vert.x is a toolkit for building reactive applications, using the Vert.x API and modules does not “auto-magically” make an application a reactive one. Yet the event-driven, non-blocking APIs that Vert.x provides tick the first box.
+这是一个很好的问题。 重要的是要记住，虽然 Vert.x 是用于构建反应式应用程序的工具包，但使用 Vert.x API 和模块不会“自动”使应用程序成为反应式应用程序。 然而，Vert.x 提供的 事件驱动、非阻塞 API 满足了第一个条件。
 
-The short answer is that no, this application is not reactive. Resiliency is not the issue, as the only errors that can arise are I/O related—and they simply result in dis- carding the connections. The application is also responsive, as it does not perform any complicated processing. If we benchmarked the TCP and HTTP servers, we would get very good latencies with low deviation and very few outliers. The following listing shows an imperfect, yet telling, quick benchmark with wrk ([https://github.com/](https://github.com/wg/wrk) [wg/wrk](https://github.com/wg/wrk)) running from a terminal.
+简单地说，答案是否定的，这个应用程序不是响应式的。弹性不是问题，因为惟一可能出现的错误是与I/O相关的—它们只会导致丢弃连接。应用程序也是响应性的，因为它不执行任何复杂的处理。如果我们对TCP和HTTP服务器进行基准测试，我们会得到非常好的延迟，并且偏差很低，异常值很少。下面的清单显示了一个不完美但很有说服力的快速基准测试，它从终端运行wrk ([https://github.com/wg/wrk](https://github.com/wg/wrk))。
 
 ![image-20220527163341291](Chapter1-Fundamentals.assets/Listing_1_17.png)
 
