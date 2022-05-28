@@ -1,4 +1,6 @@
-# 第二章: Vert.x 异步编程的基础知识
+# 第一章: Vert.x 异步编程的基础知识
+
+> 翻译: 白石(https://github.com/wjw465150/Vert.x-Core-Manual)
 
 构建反应式系统的第一步是采用异步编程。基于阻塞I/O的传统编程模型的可伸缩性不如使用非阻塞I/O的模型。用更少的资源服务更多的请求是非常有吸引力的，那么问题在哪里呢?这里确实存在一个小问题:如果您从未接触过异步编程，那么它是一种重要的范式转换!
 
@@ -289,11 +291,15 @@ Vert.x 是 *多种语言的*，因为它支持大多数流行的 JVM 语言：Ja
 
 ### 1.11.2 VertxEcho 类
 
-*Vertex Echo* 类的实现如**清单 1.15** 所示。 您可以使用运行任务（*gradle run* 或 *./gradlew run*）通过 Gradle 运行应用程序，如下所示。![image-20220527161459706](Chapter1-Fundamentals.assets/Listing_1_13.png)
+*Vertex Echo* 类的实现如**清单 1.15** 所示。 您可以使用运行任务（*gradle run* 或 *./gradlew run*）通过 Gradle 运行应用程序，如下所示。
+
+![image-20220527161459706](Chapter1-Fundamentals.assets/Listing_1_13.png)
 
 > **💡提示:** 如果您更喜欢 Maven，请从本书源代码 Git 存储库的 chapter1 文件夹中运行 `mvn compile exec:java` 而不是 `./gradlew run`。
 
-当然，您可以使用 `netcat` 命令与服务交互以回显文本，并且可以发出 HTTP 请求以查看打开的连接数，如下面的清单所示。![image-20220527161603404](Chapter1-Fundamentals.assets/Listing_1_14.png)
+当然，您可以使用 `netcat` 命令与服务交互以回显文本，并且可以发出 HTTP 请求以查看打开的连接数，如下面的清单所示。
+
+![image-20220527161603404](Chapter1-Fundamentals.assets/Listing_1_14.png)
 
 >  **💡提示:** http 命令来自位于 [httpie.org](https://httpie.org/) 的 `HTTPie` 项目。 此工具是 `curl` 的开发人员友好替代品，您可以轻松地将其安装在您的操作系统上。
 
