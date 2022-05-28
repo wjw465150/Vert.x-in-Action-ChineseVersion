@@ -15,7 +15,7 @@
 
 我们开发人员生活在一个充满流行语、技术和实践炒作周期的行业。 我长期教大学生设计、编程、集成和部署应用程序的要素，我亲眼目睹了新手在当前技术的狂野海洋中航行是多么复杂。
 
-`Asynchronous` 和 `reactive` 是现代应用程序中的重要主题，我编写本书的目标是帮助开发人员理解这些术语背后的核心概念，获得实践经验，并认识到这些方法何时有好处。 我们将使用 Eclipse Vert.x，这是一个用于编写异步应用程序的工具包，它具有为“reactive(反应式)”含义的不同定义提供解决方案的额外好处。
+**Asynchronous** 和 **reactive** 是现代应用程序中的重要主题，我编写本书的目标是帮助开发人员理解这些术语背后的核心概念，获得实践经验，并认识到这些方法何时有好处。 我们将使用 Eclipse Vert.x，这是一个用于编写异步应用程序的工具包，它具有为“reactive(反应式)”含义的不同定义提供解决方案的额外好处。
 
 在本书中，确保你理解这些概念是我的首要任务。 虽然我想让您深入了解如何编写 Vert.x 应用程序，但我还想确保您可以将在这里学到的技能转化为现在或五年后的其他类似和可能竞争的技术。
 
@@ -27,7 +27,7 @@
 
 ## 1.2 不是住在孤岛上
 
-图 1.1 是对现代应用程序的虚构描述：一组相互交互的网络服务。 以下是其中一些网络服务：
+**图 1.1** 是对现代应用程序的虚构描述：一组相互交互的网络服务。 以下是其中一些网络服务：
 
   - 像 PostgreSQL 或 MongoDB 这样的数据库存储数据。
   - 像 Elasticsearch 这样的搜索引擎允许查找以前编入索引的信息，例如目录中的产品。
@@ -68,7 +68,7 @@
 
 > **💡提示:** 您可能需要在操作系统上安装 netcat（或 nc）。
 
-在服务器端，我们可以看到以下跟踪。
+在服务器端，我们可以看到以下输出。
 
 ![](Chapter1-Fundamentals.assets/Listing_1_2.png)
 
@@ -129,7 +129,8 @@ public class SynchronousEcho {
 
 **清单 1.3** 中代码的主要问题是它为每个传入连接分配一个新线程，而线程绝不是廉价资源。 线程需要内存，线程越多，对操作系统内核调度程序施加的压力就越大，因为它需要给线程分配 CPU 时间。 我们可以改进**清单 1.3** 中的代码，通过使用线程池在连接关闭后重用线程，但在任何给定时间点我们仍然需要 *n* 个线程来处理 *n* 个连接。
 
-如图 1.2 所示，您可以在其中看到三个并发网络连接的三个线程的 CPU 使用率随时间变化。 诸如`readLine`和`write`之类的输入/输出操作可能会**阻塞**线程，这意味着它正被操作系统悬停。 发生这种情况有两个原因：
+**如图 1.2** 所示，您可以在其中看到三个并发网络连接的三个线程的 CPU 使用率随时间变化。 诸如`readLine`和`write`之类的输入/输出操作可能会**阻塞**线程，这意味着它正被操作系统悬停。 发生这种情况有两个原因：
+
   - 读取操作可能正在等待数据从网络到达。
   - 如果缓冲区因先前的写入操作已满，则写入操作可能必须等待缓冲区被耗尽。
 
@@ -153,7 +154,7 @@ public class SynchronousEcho {
 
 非阻塞I/O背后的思想是请求一个(阻塞)操作，然后继续执行其他任务，直到操作结果准备好。例如，一个非阻塞的读取可能会通过网络套接字请求最多256个字节，执行线程会做其他事情(比如处理另一个连接)，直到数据被放入缓冲区，准备在内存中使用。在此模型中，许多并发连接可以在单个线程上复用，因为网络延迟通常超过读取传入字节所需的CPU时间。
 
-Java 长期以来一直有 `java.nio` (Java NIO) 包，它通过文件和网络提供非阻塞 I/O API。 回到我们之前回显传入数据的 TCP 服务示例，清单 1.4 到 1.7 显示了使用 Java 非阻塞 I/O 的参考实现。
+Java 长期以来一直有 `java.nio` (Java NIO) 包，它通过文件和网络提供非阻塞 I/O API。 回到我们之前回显传入数据的 TCP 服务示例，**清单 1.4** 到 **清单1.7** 显示了使用 Java 非阻塞 I/O 的参考实现。
 
 ![image-20220527154418444](Chapter1-Fundamentals.assets/Listing_1_4.png)
 
@@ -213,13 +214,13 @@ Java 长期以来一直有 `java.nio` (Java NIO) 包，它通过文件和网络�
 
 通过结合这两种技术，我们可以构建可扩展且资源高效的应用程序。 现在让我们讨论一下什么是*反应式系统*，以及它如何超越“单纯的”异步编程。
 
-响应式系统的四个属性在 *The Reactive Manifesto* 中公开：*responsive*、*resilient*、*elastic* 和 *message-driven* ([www.reactivemanifesto.org/](http://www .reactivemanifesto.org/))。 我们不打算在这本书中解释这一宣言，所以这里简要介绍一下这些属性的含义：
-  - *弹性*—弹性是应用程序处理可变数量实例的能力。 这很有用，因为弹性允许应用程序通过启动新实例和跨实例负载平衡流量来响应流量峰值。 这对代码设计产生了有趣的影响，因为需要很好地识别和限制跨实例的共享状态（例如，服务器端 Web 会话）。 实例报告 *metrics* 很有用，这样编排器可以根据网络流量和报告的指标来决定何时启动或停止实例。
-  - *回弹力* -回弹力部分是弹性的另一面。当一组弹性实例中的一个实例崩溃时，可以通过将流量重定向到其他实例来实现弹性，并且可以在必要时启动一个新实例。话虽如此，弹性还有更多。当一个实例由于某些条件不能满足请求时，它仍然尝试以*降级模式*响应。根据应用程序域的不同，可以使用较旧的缓存值进行响应，甚至可以使用空数据或默认数据进行响应。也可以将请求转发到其他非错误实例。在最坏的情况下，实例可以及时响应错误。
-  - *响应性*—响应性是弹性和回弹力相结合的结果。 一致的响应时间提供了强大的服务水平协议保证。 这要归功于能够在需要时启动新实例（以保持可接受的响应时间），并且还因为实例在出现错误时仍能快速响应。 重要的是要注意，如果一个组件依赖于不可扩展的资源，比如单个中央数据库，那么响应性是不可能的。 事实上，如果它们都向一个很快就会过载的资源发出请求，那么启动更多实例并不能解决问题。
-  - *消息驱动*——使用异步消息传递而不是像远程过程调用这样的阻塞范式是弹性和回弹力的关键推动因素，从而导致响应能力。 这也使消息能够被分派到更多实例（使系统具有弹性）并控制消息生产者和消息消费者之间的流动（这是*背压*，我们将在本书后面进行探讨）。
+响应式系统的四个属性在 *The Reactive Manifesto* 中公开：*responsive*、*resilient*、*elastic* 和 *message-driven* ([www.reactivemanifesto.org/](http://www .reactivemanifesto.org/))。 我们不打算在这本书中解释这一概念，所以这里简要介绍一下这些属性的含义：
+  - **弹性**: 弹性是应用程序处理可变数量实例的能力。 这很有用，因为弹性允许应用程序通过启动新实例和跨实例负载平衡流量来响应流量峰值。 这对代码设计产生了有趣的影响，因为需要很好地识别和限制跨实例的共享状态（例如，服务器端 Web 会话）。 实例报告 *metrics* 很有用，这样编排器可以根据网络流量和报告的指标来决定何时启动或停止实例。
+  - **回弹力**: 回弹力部分是弹性的另一面。当一组弹性实例中的一个实例崩溃时，可以通过将流量重定向到其他实例来实现弹性，并且可以在必要时启动一个新实例。话虽如此，弹性还有更多。当一个实例由于某些条件不能满足请求时，它仍然尝试以*降级模式*响应。根据应用程序域的不同，可以使用较旧的缓存值进行响应，甚至可以使用空数据或默认数据进行响应。也可以将请求转发到其他非错误实例。在最坏的情况下，实例可以及时响应错误。
+  - **响应性**: 响应性是弹性和回弹力相结合的结果。 一致的响应时间提供了强大的服务水平协议保证。 这要归功于能够在需要时启动新实例（以保持可接受的响应时间），并且还因为实例在出现错误时仍能快速响应。 重要的是要注意，如果一个组件依赖于不可扩展的资源，比如单个中央数据库，那么响应性是不可能的。 事实上，如果它们都向一个很快就会过载的资源发出请求，那么启动更多实例并不能解决问题。
+  - **消息驱动**: 使用异步消息传递而不是像远程过程调用这样的阻塞范式是弹性和回弹力的关键推动因素，从而导致响应能力。 这也使消息能够被分派到更多实例（使系统具有弹性）并控制消息生产者和消息消费者之间的流动（这是*背压*，我们将在本书后面进行探讨）。
 
-反应式系统表现出这四个属性，它们构成了可靠且资源高效的系统。
+反应式系统表现出这4个属性，它们构成了可靠且资源高效的系统。
 
 **异步是否意味着响应式？**
 
@@ -235,9 +236,9 @@ Java 长期以来一直有 `java.nio` (Java NIO) 包，它通过文件和网络�
 
 **表 1.1 所有的反应性事物**
 
-| **反应式?** | **描述**                                              |
+| **反  应  式?** | **描述**                                              |
 | ------------- | ------------------------------------------------------------ |
-| 系统  | 消息驱动、回弹、弹性和响应式的可靠应用程序。 |
+| 系    统  | 消息驱动、回弹、弹性和响应式的可靠应用程序。 |
 | 程序设计 | 对变化和事件做出反应的一种方式。 电子表格程序是反应式编程的一个很好的例子：当单元格数据发生变化时，具有取决于受影响单元格的公式的单元格会自动重新计算。 在本书的后面部分，您将看到 RxJava，一个流行的 Java 反应式扩展 API，它极大地帮助协调异步事件和数据处理。 还有*函数响应式编程*，这是我们不会在本书中介绍的一种编程风格，但 Stephen Blackheath 和 Anthony Jones 的*函数响应式编程*（Manning，2016 年）是一个极好的资源。 |
 | 流       | 当系统交换连续的数据流时，就会出现经典的生产者/消费者问题。 提供*背压*机制尤其重要，这样消费者可以在发射速度过快时通知生产者。 对于反应式流 (www.reactive-streams.org)，主要目标是在系统之间达到最佳吞吐量。 |
 
@@ -290,7 +291,7 @@ Vert.x 是 *多种语言的*，因为它支持大多数流行的 JVM 语言：Ja
 
 *Vertex Echo* 类的实现如**清单 1.15** 所示。 您可以使用运行任务（*gradle run* 或 *./gradlew run*）通过 Gradle 运行应用程序，如下所示。![image-20220527161459706](Chapter1-Fundamentals.assets/Listing_1_13.png)
 
-> **💡提示:** 如果您更喜欢 Maven，请从本书源代码 Git 存储库的 chapter1 文件夹中运行 *mvn compile exec:java* 而不是 *./gradlew run*。
+> **💡提示:** 如果您更喜欢 Maven，请从本书源代码 Git 存储库的 chapter1 文件夹中运行 `mvn compile exec:java` 而不是 `./gradlew run`。
 
 当然，您可以使用 `netcat` 命令与服务交互以回显文本，并且可以发出 HTTP 请求以查看打开的连接数，如下面的清单所示。![image-20220527161603404](Chapter1-Fundamentals.assets/Listing_1_14.png)
 
@@ -359,13 +360,13 @@ public class VertxEcho {
 
 ### 1.11.3 回调函数的作用
 
-正如您在清单 1.15 中看到的，*callbacks(回调)* 是 Vert.x 用于通知应用程序代码异步事件并将它们传递给某些处理程序的主要方法。 结合 Java 中的 lambda 表达式，回调为定义事件处理提供了一种简洁的方式。
+正如您在**清单 1.15** 中看到的，*callbacks(回调)* 是 Vert.x 用于通知应用程序代码异步事件并将它们传递给某些处理程序的主要方法。 结合 Java 中的 lambda 表达式，回调为定义事件处理提供了一种简洁的方式。
 
 您可能听说过或经历过臭名昭著的**回调地狱**，回调嵌套在回调中，导致代码难以阅读和推理。
 
 ![image-20220527163209979](Chapter1-Fundamentals.assets/Listing_1_16.png)
 
-请放心：虽然 Vert.x 核心 API 确实使用回调，但 Vert.x 提供了对更多编程模型的支持。 回调是事件驱动 API 中通知的规范方法，但正如您将在接下来的章节中看到的那样，可以在回调之上构建其他抽象，例如futures 和 promises、反应式扩展和协程。
+请放心：虽然 Vert.x 核心 API 确实使用回调，但 Vert.x 提供了对更多编程模型的支持。 回调是事件驱动 API 中通知的规范方法，但正如您将在接下来的章节中看到的那样，可以在回调之上构建其他抽象，例如**futures** 和 **promises**、反应式扩展和协程。
 
 虽然回调有它们的问题，但在许多情况下，当嵌套层次很少时少，它们仍然是一个非常好的编程模型，调度开销最小。
 
@@ -377,32 +378,32 @@ public class VertxEcho {
 
 ![image-20220527163341291](Chapter1-Fundamentals.assets/Listing_1_17.png)
 
-The culprit for not being reactive clearly is elasticity. Indeed, if we create new instances, each instance maintains its own connection counter. The counter scope is the application, so it should be a shared global counter between all instances.
+反应式应用程序的罪魁祸首是弹性。 事实上，如果我们创建新实例，每个实例都会维护自己的连接计数器。 计数器范围是应用程序，因此它应该是所有实例之间共享的全局计数器。
 
-As this example shows, designing reactive applications is more subtle than just implementing responsive and resource-efficient systems. Ensuring that an application can run as many replaceable instances is surprisingly more engaging, especially as we need to think about *instance state* versus *application state* to make sure that instances are interchangeable.
+正如这个示例所示，设计响应式应用程序比仅仅实现响应式和资源高效的系统更微妙。确保一个应用程序可以运行尽可能多的可替换实例令人惊讶地更有吸引力，特别是当我们需要考虑*实例状态*和*应用程序状态*来确保实例是可替换的。
 
-**What if I am a Windows user?**
+**如果我是Windows用户怎么办?**
 
-wrk is a command-line tool that works on Unix systems like Linux and macOS.
+*wrk* 是一个命令行工具，适用于 Linux 和 macOS 等 Unix 系统。
 
-In this book we prefer Unix-style tooling and command-line interfaces over graphical user interfaces. We will use Unix tools that are powerful, intuitive, and maintained by active open source communities.
+在本书中，我们更喜欢 Unix 风格的工具和命令行界面，而不是图形用户界面。 我们将使用功能强大、直观且由活跃的开源社区维护的 Unix 工具。
 
-Fortunately, you don’t have to leave Windows to benefit from these tools! While some of these tools work natively on Windows, starting from Windows 10 you can install the Windows Subsystem for Linux (WSL) and benefit from a genuine Linux environ- ment alongside your more traditional Windows desktop environment. Microsoft mar- kets WSL as a major feature for developers on Windows, and I can only recommend that you invest some time and get familiar with it. You can see Microsoft’s WSL FAQ for more details: https://docs.microsoft.com/en-us/windows/wsl/faq.
+幸运的是，您不必离开 Windows 也能从这些工具中受益！ 虽然其中一些工具在 Windows 上原生运行，但从 Windows 10 开始，您可以安装 Windows 子系统 for Linux (WSL)，并从真正的 Linux 环境以及更传统的 Windows 桌面环境中受益。 Microsoft 将 WSL 作为 Windows 开发人员的主要功能推向市场，我只能建议您花一些时间熟悉它。 您可以查看 Microsoft 的 WSL 常见问题以了解更多详细信息：https://docs.microsoft.com/en-us/windows/wsl/faq。
 
-## 1.12 What are the alternatives to Vert.x?
+## 1.12 Vert.x 有哪些替代品?
 
-As you will see in this book, Vert.x is a compelling technology for building end-to-end reactive applications. Reactive application development is a trendy topic, and it is more important to understand the principles than to blindly become an expert in one specific technology. What you will learn in this book easily transfers to other technolo- gies, and I highly encourage you to check them out.
+正如您将在本书中看到的，Vert.x 是一种用于构建端到端反应式应用程序的引人注目的技术。 响应式应用程序开发是一个热门话题，了解原理比盲目成为某一特定技术的专家更重要。 你将在本书中学到的东西很容易转移到其他技术，我强烈建议你去看看。
 
-Here are the most popular alternatives to Vert.x for asynchronous and reactive programming:
-  - *Node.js*—Node.js is an event-driven runtime for writing asynchronous JavaScript applications. It is based on the V8 JavaScript engine that is used by Google Chrome. At first sight, Vert.x and Node.js have lots of similarities. Still, they dif- fer greatly. Vert.x runs multiple event loops by default, unlike Node.js. Also, the JVM has a better JIT compiler and garbage collector, so the JVM is better suited for long-running processes. Last, but not least, Vert.x supports JavaScript.
-  - *Akka*—Akka is a faithful implementation of the *actor* model. It runs on the JVM and primarily offers Scala APIs, although Java bindings are also being pro- moted. Akka is particularly interesting, as actors are message driven and loca- tion transparent, and actors offer supervision features that are interesting for error recovery. Akka clearly targets the design of reactive applications. As you will see in this book, Vert.x is no less capable for the task. Vert.x has a concept of *verticles*, a loose form of actors, that are used for processing asynchronous events. Interestingly, Vert.x is significantly faster than Akka and most alter- natives in established benchmarks, such as TechEmpower benchmarks ([www.techempower.com/benchmarks/](www.techempower.com/benchmarks/))
-  - *Spring Framework*—The older and widespread Spring Framework now integrates a reactive stack. It is based on Project Reactor, an API for reactive programming that is very similar to RxJava. The focus of the Spring reactive stack is essentially on reactive programming APIs, but it does not necessarily lead to end-to-end reac- tive applications. Many parts of the Spring Framework employ blocking APIs, so extra care must be taken to limit the exposure to blocking operations. Project Reactor is a compelling alternative to RxJava, but the Spring reactive stack is tied to this API, and it may not always be the best way to express certain asynchronous constructions. Vert.x provides more flexibility as it supports callbacks, futures, Java CompletionStage, Kotlin coroutines, RxJava, and fibers. This means that with Vert.x it is easier to select the right asynchronous programming model for a certain task. Also like with Akka, Vert.x remains significantly faster in TechEmpower benchmarks, and applications boot faster than Spring-based ones.
-  - *Quarkus* —Quarkus is a new framework for developing Java applications that run exceptionally well in container environments like Kubernetes ([https://](https://quarkus.io/) [quarkus.io](https://quarkus.io/)). Indeed, in such environments, boot time and memory consumption are critical cost-saving factors. Quarkus employs techniques at compilation time to make sensible gains when running using traditional Java virtual machines and as native executables. It is based on popular libraries like Hibernate, Eclipse MicroProfile, RESTEasy, and Vert.x. Quarkus unifies imperative and reactive programming models, and Vert.x is a cornerstone of the framework. Vert.x is not just used to power some pieces of the networking stack; some client modules are directly based on those from Vert.x, such as the Quarkus mail service and reactive routes. You can also use Vert.x APIs in a Quarkus application, with the unification between reactive and imperative helping you to bridge both worlds. Vert.x and Quarkus have different programming paradigms: Vert.x will appeal to develop- ers who prefer a toolkit approach, or developers who have affinities with Node.js. In contrast, Quarkus will appeal to developers who prefer an opinionated stack approach with dependency injection and convention over configuration. In the end, both projects work together, and anything you develop with Vert.x can be reused in Quarkus.
-  - *Netty* —The Netty framework provides non-blocking I/O APIs for the JVM. It provides abstractions and platform-specific bug fixes compared to using raw NIO APIs. It also provides threading models. The target of Netty is low-latency and high-performance network applications. While you can certainly build reactive applications with Netty, the APIs remain somewhat low-level. Vert.x is one of the many technologies built on top of Netty (Spring Reactive and Akka have Netty integration), and you can get all the performance benefits of Netty with the simpler APIs of Vert.x.
-  - *Scripting languages* —Scripting languages such as Python and Ruby also provide non-blocking I/O libraries, such as Async (Ruby) and Twisted (Python). You can certainly build reactive systems with them. Again, the JVM performance is an advantage for Vert.x, along with the ability to use alternative JVM languages (Ruby is officially supported by Vert.x).
-  - *Native languages*—Native languages are becoming trendy again. Instead of using the venerable C/C++ languages, Go, Rust, and Swift are gaining mindshare. They all tick the boxes for building highly scalable applications, and they certainly can be used for creating reactive applications. That being said, most efficient libraries in these languages are fairly low-level, and ultimately the JVM-based Vert.x/Netty combination still ranks favorably in benchmarks.
+以下是 Vert.x 最流行的异步和响应式编程替代方案：
+  - **Node.js**—Node.js 是用于编写异步 JavaScript 应用程序的事件驱动运行时。 它基于 Google Chrome 使用的 V8 JavaScript 引擎。 乍一看，Vert.x 和 Node.js 有很多相似之处。 尽管如此，它们还是有很大的不同。 与 Node.js 不同，Vert.x 默认运行多个事件循环。 此外，JVM 具有更好的 JIT 编译器和垃圾收集器，因此 JVM 更适合长时间运行的进程。 最后但同样重要的是，Vert.x 支持 JavaScript。
+  - **Akka**—Akka 是 *actor* 模型的忠实实现。 它在 JVM 上运行，主要提供 Scala API，尽管 Java 绑定也在推广中。 Akka 特别有趣，因为 Actor 是消息驱动的并且位置透明，并且 Actor 提供了对错误恢复很感兴趣的监督功能。 Akka 明确地针对响应式应用程序的设计。 正如您将在本书中看到的那样，Vert.x 的能力丝毫不逊于这项任务。 Vert.x 有一个 *verticles* 的概念，这是一种松散形式的 Actor，用于处理异步事件。 有趣的是，Vert.x 在已建立的基准测试（例如 TechEmpower 基准测试（[www.techempower.com/benchmarks/](www.techempower.com/benchmarks/)）中明显快于 Akka 和大多数替代方案
+  - **Spring Framework**—较旧且广泛使用的 Spring Framework 现在集成了一个响应式堆栈。它基于 Project Reactor，这是一种与 RxJava 非常相似的反应式编程 API。 Spring 响应式堆栈的重点本质上是响应式编程 API，但它并不一定会导致端到端的响应式应用程序。 Spring 框架的许多部分都使用阻塞 API，因此必须格外小心以限制对阻塞操作的暴露。 Project Reactor 是 RxJava 的一个引人注目的替代品，但 Spring 反应式堆栈与此 API 相关联，它可能并不总是表达某些异步构造的最佳方式。 Vert.x 提供了更大的灵活性，因为它支持回调、futures、Java CompletionStage、Kotlin 协程、RxJava 和纤程。这意味着使用 Vert.x 可以更轻松地为特定任务选择正确的异步编程模型。与 Akka 一样，Vert.x 在 TechEmpower 基准测试中仍然明显更快，并且应用程序的启动速度比基于 Spring 的应用程序更快。
+  - **Quarkus** —Quarkus 是一个用于开发 Java 应用程序的新框架，它在 Kubernetes 等容器环境中运行得非常好 ([https://](https://quarkus.io/) [quarkus.io](https://quarkus.io/) ）。实际上，在这样的环境中，启动时间和内存消耗是节省成本的关键因素。 Quarkus 采用编译时技术，在使用传统 Java 虚拟机运行并作为本机可执行文件时获得显着收益。它基于 Hibernate、Eclipse MicroProfile、RESTEasy 和 Vert.x 等流行库。 Quarkus 统一了命令式和响应式编程模型，而 Vert.x 是该框架的基石。 Vert.x 不仅用于为网络堆栈的某些部分提供动力；一些客户端模块直接基于 Vert.x 中的模块，例如 Quarkus 邮件服务和响应式路由。您还可以在 Quarkus 应用程序中使用 Vert.x API，反应式和命令式之间的统一有助于您在两个世界之间架起一座桥梁。 Vert.x 和 Quarkus 有不同的编程范式：Vert.x 将吸引喜欢工具包方法的开发人员，或与 Node.js 有密切关系的开发人员。相比之下，Quarkus 将吸引那些喜欢依赖注入和约定优于配置的固执堆栈方法的开发人员。最后，这两个项目可以协同工作，您使用 Vert.x 开发的任何东西都可以在 Quarkus 中重用。
+  - **Netty** —Netty 框架为 JVM 提供了非阻塞 I/O API。 与使用原始 NIO API 相比，它提供了抽象和特定于平台的错误修复。 它还提供线程模型。 Netty 的目标是低延迟和高性能的网络应用程序。 虽然您当然可以使用 Netty 构建反应式应用程序，但 API 仍然处于较低级别。 Vert.x 是建立在 Netty 之上的众多技术之一（Spring Reactive 和 Akka 具有 Netty 集成），您可以通过 Vert.x 更简单的 API 获得 Netty 的所有性能优势。
+  - **Scripting languages** —Python 和 Ruby 等脚本语言还提供非阻塞 I/O 库，例如 Async (Ruby) 和 Twisted (Python)。 您当然可以使用它们构建反应式系统。 同样，JVM 性能是 Vert.x 的一个优势，以及使用替代 JVM 语言的能力（Vert.x 正式支持 Ruby）。
+  - **Native languages**—本机可执行语言再次变得流行。 Go、Rust 和 Swift 不再使用古老的 C/C++ 语言，而是越来越受欢迎。 它们都为构建高度可扩展的应用程序打勾，它们当然可以用于创建反应式应用程序。 话虽如此，这些语言中最高效的库都是相当低级的，最终基于 JVM 的 Vert.x/Netty 组合仍然在基准测试中排名靠前。
 
-The following books are good resources for many of the preceding topics:
+以下书籍是前面许多主题的好资源：
   - *Node.js in Action* by Mike Cantelon, Marc Harter, T.J. Holowaychuk, and Nathan Rajlich (Manning, 2013)
   - *Akka in Action* by Raymond Roestenburg, Rob Bakker, and Rob Williams (Man- ning, 2016)
   - *Reactive Application Development* by Duncan K. DeVore, Sean Walsh, and Brian Hanafee (Manning, 2018)
@@ -412,13 +413,13 @@ The following books are good resources for many of the preceding topics:
   - *Rust in Action* by Tim McNamara (Manning, 2019)
   - *Swift in Depth* by Tjeerd in 't Veen (Manning, 2018)
 
-In the next chapter, we will dissect the fundamentals of asynchronous programming with Vert.x.
+在下一章中，我们将剖析使用 Vert.x 进行异步编程的基础知识。
 
-## Summary
+## 总结
 
-  - Asynchronous programming allows you to multiplex multiple networked con- nections on a single thread.
-  - Managing non-blocking I/O is more complex than the equivalent imperative code based on blocking I/O, even for simple protocols.
-  - The event loop and the reactor pattern simplify asynchronous event processing.
-  - A reactive system is both scalable and resilient, producing responses with consis- tent latencies despite demanding workloads and failures.
-  - Vert.x is an approachable, efficient toolkit for writing asynchronous and reac- tive applications on the JVM.
+  - 异步编程允许您在单个线程上多路复用多个网络连接。
+  - 管理非阻塞 I/O 比基于阻塞 I/O 的等效命令式代码更复杂，即使对于简单的协议也是如此。
+  - 事件循环和反应器模式简化了异步事件处理。
+  - 反应式系统既可扩展又具有弹性，尽管工作负载和故障要求很高，但仍能产生具有一致延迟的响应。
+  - Vert.x 是一个平易近人、高效的工具包，用于在 JVM 上编写异步和响应式应用程序。
 
