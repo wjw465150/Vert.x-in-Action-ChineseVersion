@@ -94,9 +94,9 @@ public class JdkStreams {
 }
 ```
 
-> <1>: Using try-with-resources we ensure that reader.close() is always going to be called, whether the execution completes normally or exceptionally.
+> <1>: 使用try-with-resources可以确保无论正常执行还是异常执行，`reader.close()`都会被调用。
 >
-> <2>: We insert two lines to the console once reading has finished.
+> <2>: 一旦读取完成，我们将插入两行到控制台。
 
 Listing 4.1 shows a classic example of using JDK I/O streams to read a file and then output its content to the console, while taking care of possible errors. We read data to a buffer and then immediately write the buffer content to the standard console before recycling the buffer for the next read.
 
@@ -133,17 +133,17 @@ public class VertxStreams {
 }
 ```
 
-> <1>: Opening a file with Vert.x requires options, such as whether the file is in read, write, append mode, and more.
+> <1>: 使用Vert.x打开文件需要一些选项，比如文件是否处于读、写、追加模式等等。
 >
-> <2>: Opening a file is an asynchronous operation.
+> <2>: 打开文件是一个异步操作。
 >
-> <3>: AsyncFile is the interface for Vert.x asynchronous files.
+> <3>: AsyncFile是Vertx异步文件的接口。
 >
-> <4>: The callback for new buffer data.
+> <4>: 新缓冲区数据的回调。
 >
-> <5>: The callback when an exception arises.
+> <5>: 出现异常时的回调。
 >
-> <6>: The callback when the stream ends.
+> <6>: 流结束时的回调。
 
 The approach is declarative here, as we define handlers for the different types of events when reading the stream. We are being *pushed* data, whereas in listing 4.1 we were *pulling* data from the stream.
 
