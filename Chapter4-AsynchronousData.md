@@ -1,27 +1,26 @@
 # 第四章: 异步数据和事件流
 
-**This chapter covers**
-  - Why streams are a useful abstraction on top of eventing
-  - What back-pressure is, and why it is fundamental for asynchronous producers and consumers
-  - How to parse protocol data from streams
+**本章涵盖了**
 
-So far we have been processing events using *callbacks*, and from various sources such as HTTP or TCP servers. Callbacks allow us to reason about events one at a time.
+  - 为什么流是事件之上的有用抽象
+  - 什么是背压，以及为什么它是异步生产者和消费者的基础
+  - 如何从流中解析协议数据
 
-Processing an incoming data buffer from a TCP connection, from a file, or from an HTTP request is not very different: you need to declare a callback handler that reacts to each event and allows custom processing.
+到目前为止，我们一直在使用 **callbacks** 处理来自各种来源（例如 HTTP 或 TCP 服务器）的事件。回调函数允许我们一次推理一个事件。
 
-That being said, most events need to be processed as a series rather than as isolated events. Processing the body of an HTTP request is a good example, as several buffers of different sizes need to be assembled to reconstitute the full body payload. Since reactive applications deal with non-blocking I/O, efficient and correct stream processing is key. In this chapter we’ll look at why streams pose challenges
+处理来自TCP连接、文件或HTTP请求的传入数据缓冲区并没有太大的不同:您需要声明一个回调处理程序来响应每个事件并允许自定义处理。
 
-and how Vert.x offers a comprehensive unified stream model.
+也就是说，大多数事件需要作为一个系列而不是作为孤立事件来处理。处理HTTP请求正文就是一个很好的例子，因为需要组装几个不同大小的缓冲区来重新构建整个正文负载。由于响应式应用程序处理非阻塞I/O，高效和正确的流处理是关键。在本章中，我们将看看为什么流会带来挑战，以及Vert.x如何提供全面统一的流模型。
 
-## 4.1 Unified stream model
+## 4.1 统一的流模型
 
-Vert.x offers a unified abstraction of streams across several types of resources, such as files, network sockets, and more. A *read stream* is a source of events that can be read, whereas a *write stream* is a destination for events to be sent to. For example, an HTTP request is a read stream, and an HTTP response is a write stream.
+Vert.x 提供跨多种类型资源的流的统一抽象，例如文件、网络套接字等。 *read stream* 是可以读取的事件源，而 *write stream* 是要发送到的事件的目的地。 例如，HTTP 请求是读取流，HTTP 响应是写入流。
 
-Streams in Vert.x span a wide range of sources and sinks, including those listed in table 4.1.
+Vert.x中的流跨越了广泛的源和接收范围，包括**表 4.1**中列出的那些。
 
-**Table 4.1 Vert.x common read and write streams**
+**表 4.1 Vert.x 常用读写流**
 
-| **Stream** **resource**     | **Read support** | **Write** **support** |
+| **流资源**  | **读取支持** | **写入支持** |
 | --------------------------- | ---------------- | --------------------- |
 | TCP sockets                 | Yes              | Yes                   |
 | UDP datagrams               | Yes              | Yes                   |
@@ -32,38 +31,38 @@ Streams in Vert.x span a wide range of sources and sinks, including those listed
 | Kafka events                | Yes              | Yes                   |
 | Periodic timers             | Yes              | No                    |
 
-Read and write stream are defined through the *ReadStream* and *WriteStream* interfaces of the *io.vertx.core.streams* package. You will mostly deal with APIs that implement these two interfaces rather than implement them yourself, although you may have to do so if you want to connect to some third-party asynchronous event API.
+读写流是通过 *io.vertx.core.streams* 包的 *ReadStream* 和 *WriteStream* 接口定义的。 您将主要处理实现这两个接口的 API，而不是自己实现它们，尽管如果您想连接到某些第三方异步事件 API，您可能必须这样做。
 
-These interfaces can be seen as each having two parts:
-  - Essential methods for reading or writing data
-  - Back-pressure management methods that we will cover in the next section
+这些接口可以看成是由两部分组成:
+  - 读写数据的基本方法
+  - 我们将在下一节介绍背压管理方法
 
-Table 4.2 lists the essential methods of read streams. They define callbacks for being notified of three types of events: some data has been read, an exception has arisen, and the stream has ended.
+**表 4.2** 列出了读流的基本方法。它们定义了三种事件通知的回调:读取了一些数据，出现了异常，流结束了。
 
-**Table 4.2** **ReadStream** **essential methods**
+**表4.2 ReadStream 基本方法**
 
-| **Method**                           | **Description**                                              |
+| **方法**                             | **描述**                                                     |
 | ------------------------------------ | ------------------------------------------------------------ |
-| handler(Handler<T>)                  | Handles a new read value of type T (e.g.,  Buffer, byte[], JsonObject, etc.) |
-| exceptionHandler(Handler<Throwable>) | Handles a read exception                                     |
-| endHandler(Handler<Void>)            | Called when the  stream has ended,  either because all data has been read or because  an exception has been raised |
+| handler(Handler<T>)                  | 处理 T 类型的新读取值（例如 Buffer、byte[]、JsonObject 等）  |
+| exceptionHandler(Handler<Throwable>) | 处理读取异常                                                 |
+| endHandler(Handler<Void>)            | 当流结束时调用，原因可能是所有数据都已读取，也可能是引发了异常 |
 
-Similarly, the essential methods of write streams listed in table 4.3 allow us to write data, end a stream, and be notified when an exception arises.
+类似地，**表 4.3** 中列出的写流的基本方法允许我们写数据，结束流，并在发生异常时得到通知。
 
-**Table 4.3** **WriteStream** **essential methods**
+**表4.3 WriteStream基本方法**
 
-| **Method**                           | **Description**                                              |
+| **方法**                             | **描述**                                                     |
 | ------------------------------------ | ------------------------------------------------------------ |
-| write(T)                             | Writes some  data of type,  T (e.g., Buffer,    byte[], JsonObject, etc.) |
-| exceptionHandler(Handler<Throwable>) | Handles a write exception                                    |
-| end()                                | Ends the stream                                              |
-| end(T)                               | Writes some  data of type,  T, and then  ends   the stream   |
+| write(T)                             | 写入一些类型为 T 的数据（例如 Buffer、byte[]、JsonObject 等） |
+| exceptionHandler(Handler<Throwable>) | 处理写入异常                                                 |
+| end()                                | 结束流                                                       |
+| end(T)                               | 写入一些类型为 T 的数据，然后结束流                          |
 
-We already manipulated streams in the previous chapters without knowing it, such as with TCP and HTTP servers.
+在前面的章节中，我们已经在不知不觉中操纵了流，例如使用 TCP 和 HTTP 服务器。
 
-The *java.io* APIs form a classic stream I/O abstraction for reading and writing data from various sources in Java, albeit using blocking APIs. It is interesting to compare the JDK streams with the Vert.x non-blocking stream APIs.
+*java.io* API 形成了一个经典的流 I/O 抽象，用于从 Java 中的各种来源读取和写入数据，尽管使用了阻塞 API。 将 JDK 流与 Vert.x 非阻塞流 API 进行比较也是很有趣的。
 
-Suppose we want to read the content of a file and output its content to the standard console output.
+假设我们要读取文件的内容并将其内容输出到标准控制台输出。
 
 ![](Chapter4-AsynchronousData.assets/Listing_4_1.png)
 
@@ -98,9 +97,9 @@ public class JdkStreams {
 >
 > <2>: 一旦读取完成，我们将插入两行到控制台。
 
-Listing 4.1 shows a classic example of using JDK I/O streams to read a file and then output its content to the console, while taking care of possible errors. We read data to a buffer and then immediately write the buffer content to the standard console before recycling the buffer for the next read.
+**清单 4.1** 显示了一个使用 JDK I/O 流读取文件然后将其内容输出到控制台的经典示例，同时处理可能的错误。 我们将数据读取到缓冲区，然后立即将缓冲区内容写入标准控制台，然后再回收缓冲区以供下次读取。
 
-The following listing shows the same code as in listing 4.1, but using the Vert.x asynchronous file APIs.
+以下清单显示了与**清单 4.1** 中相同的代码，但使用了 Vert.x 异步文件 API。
 
 ![](Chapter4-AsynchronousData.assets/Listing_4_2.png)
 
@@ -145,269 +144,264 @@ public class VertxStreams {
 >
 > <6>: 流结束时的回调。
 
-The approach is declarative here, as we define handlers for the different types of events when reading the stream. We are being *pushed* data, whereas in listing 4.1 we were *pulling* data from the stream.
+这里的方法是声明式的，因为我们在读取流时为不同类型的事件定义了处理程序。我们正在被 **push(推)** 数据，而在**清单 4.1** 中我们正在从流中 **pull(拉)** 数据。
 
-This difference may seem cosmetic at first sight, with data being pulled in one example, while being pushed in the other. However, the difference is major, and we need to understand it to master asynchronous streams, whether with Vert.x or with other solutions.
+乍一看，这种差异似乎是表面上的，在一个示例中提取数据，而在另一个示例中推送数据。 但是，区别很大，我们需要了解它才能掌握异步流，无论是使用 Vert.x 还是使用其他解决方案。
 
-This brings us to the notion of *back-pressure*.
+这让我们想到了**背压**的概念。
 
-## 4.2 What is back-pressure?
+## 4.2 什么是背压?
 
-Back-pressure is a mechanism for a consumer of events to signal an event’s producer that it is emitting events at a faster rate than the consumer can handle them. In reactive systems, back-pressure is used to pause or slow down a producer so that consumers avoid accumulating unprocessed events in unbounded memory buffers, possibly exhausting resources.
+背压是事件消费者向事件生产者发出信号的一种机制，因为发出事件的速度比消费者可以处理的速度更快。 在反应式系统中，背压用于暂停或减慢生产者的速度，以便消费者避免在无限的内存缓冲区中累积未处理的事件，从而可能耗尽资源。
 
-To understand why back-pressure matters with asynchronous streams, let’s take the example of an HTTP server used for downloading Linux distribution images, and consider the implementation without any back-pressure management strategy in place.
+为了理解为什么背压对异步流很重要，让我们以用于下载 Linux 分发映像的 HTTP 服务器为例，并考虑在没有任何背压管理策略的情况下实现。
 
-Linux distribution images are often distributed as .iso files and can easily weigh several gigabytes. Implementing a server that could distribute such files would involve doing the following:
-  1. Open an HTTP server.
-  2. For each incoming HTTP request, find the corresponding file.
-  3. For each buffer read from the file, write it to the HTTP response body.
+Linux 分发映像通常以 `.iso` 文件的形式分发，并且很容易达到数GB。 实现可以分发此类文件的服务器将涉及执行以下操作：
+  1. 打开 HTTP 服务器。
+  2. 对于每个传入的 HTTP 请求，找到相应的文件。
+  3. 对于从文件读取的每个缓冲区，将其写入HTTP响应体。
 
-Figure 4.1 provides an illustration of how this would work with Vert.x, although this also applies to any non-blocking I/O API. Data buffers are read from the file stream, and then passed to a handler. The handler is unlikely to do anything but directly write each buffer to the HTTP response stream. Each buffer is eventually written to the underlying TCP buffer, either directly or as smaller chunks. Since the TCP buffer may be full (either because of the network or because the client is busy), it is necessary to maintain a buffer of pending buffers to be written (the write queue in figure 4.1). Remember, a write operation is non-blocking, so buffering is needed. This sounds like a very simple processing pipeline, so what could possibly go wrong?
+**图 4.1** 说明了这将如何与 Vert.x 一起工作，尽管这也适用于任何非阻塞 I/O API。 数据缓冲区从文件流中读取，然后传递给处理程序。 除了直接将每个缓冲区写入 HTTP 响应流之外，处理程序不太可能做任何事情。 每个缓冲区最终都会直接或作为较小的块写入底层 TCP 缓冲区。 由于 TCP 缓冲区可能已满（由于网络或客户端繁忙），因此有必要维护一个待写入的未决缓冲区缓冲区（**图 4.1** 中的写入队列）。 请记住，写操作是非阻塞的，因此需要缓冲。 这听起来像是一个非常简单的处理管道，那么可能会出现什么问题呢？
 
 ![](Chapter4-AsynchronousData.assets/Figure_4_1.png)
 
-Reading from a filesystem is generally fast and low-latency, and given several read requests, an operating system is likely to cache some pages into RAM. By contrast, writing to the network is much slower, and bandwidth depends on the weakest network link. Delays also occur.
+从文件系统中读取通常是快速且低延迟的，并且给定多个读取请求，操作系统可能会将一些页面缓存到 RAM 中。 相比之下，写入网络要慢得多，带宽取决于最弱的网络链接。 也会出现延迟。
 
-As the reads are much faster than writes, a write buffer, as shown in figure 4.1, may quickly grow very large. If we have several thousand concurrent connections to download ISO images, we may have lots of buffers accumulated in write buffer queues. We may actually have several gigabytes worth of ISO images in a JVM process memory, waiting to be written over the network! The more buffers there are in write queues, the more memory the process consumes.
+由于读取比写入快得多，因此如**图 4.1** 所示的写入缓冲区可能会很快变得非常大。 如果我们有几千个并发连接来下载 ISO 映像，我们可能会在写入缓冲区队列中积累大量缓冲区。 实际上，我们在 JVM 进程内存中可能有几GB的 ISO 映像，等待通过网络写入！ 写入队列中的缓冲区越多，进程消耗的内存就越多。
 
-The risk here is clearly that of exhaustion, either because the process eats all available physical memory, or because it runs in a memory-capped environment such as a container. This raises the risk of consuming too much memory and even crashing.
+这里的风险显然是耗尽的风险，要么是因为进程吃掉了所有可用的物理内存，要么是因为它运行在内存上限的环境中，例如容器。 这增加了消耗过多内存甚至崩溃的风险。
 
-As you can probably guess, one solution is *back-pressure signaling*, which enables the read stream to adapt to the throughput of the write stream. In the previous example,when the HTTP response write queue grows too big, it should be able to notify the file read stream that it is going too fast. In practice, pausing the source stream is a good way to manage back-pressure, because it gives time to write the items in the write buffer while not accumulating new ones.
+正如您可能猜到的那样，一个解决方案是**背压信号**，它使读流适应写流的吞吐量。在前面的示例中，当HTTP响应写队列增长得太大时，它应该能够通知文件读流速度太快。在实践中，暂停源流是管理背压的一种好方法，因为它给写入缓冲区中的项留出了时间，而不会积累新的项。
 
->  **💡提示:** Blocking I/O APIs have an implicit form of back-pressure by blocking execution threads until I/O operations complete. Write operations block when buffers are full, which prevents blocked threads from pulling more data until write operations have completed.
+>  **💡提示:** 阻塞 I/O API 通过阻塞执行线程直到 I/O 操作完成具有隐式形式的背压。 当缓冲区已满时，写入操作会阻塞，这可以防止阻塞的线程在写入操作完成之前提取更多数据。
 
-Table 4.4 lists the back-pressure management methods of ReadStream. By default, a read stream reads data as fast as it can, unless it is being paused. A processor can pause and then resume a read stream to control the data flow.
+**表 4.4** 列出了 ReadStream 的背压管理方法。 默认情况下，读取流会尽可能快地读取数据，除非它被暂停。 处理器可以暂停然后恢复读取流以控制数据流。
 
-**Table 4.4 ReadStream back-pressure management methods**
+**表 4.4 ReadStream 背压管理方式**
 
-| **Method** | **Description**                                              |
-| ---------- | ------------------------------------------------------------ |
-| pause()    | Pauses the stream, preventing further data from being sent to the handler. |
-| resume()   | Starts reading data again and  sending it to the handler.    |
-| fetch(n)   | Demands a number, n, of elements to  be read (at most). The stream must be paused before calling fetch(n). |
+| **方法** |                                **描述**                                |
+| -------- | --------------------------------------------------------------------- |
+| pause()  | 暂停流，防止进一步的数据发送到处理程序。                                   |
+| resume() | 再次开始读取数据并将其发送到处理程序。                                     |
+| fetch(n) | 要求（最多）读取 n 个元素。 在调用 fetch(n) 之前必须暂停流(调用pause方法)。 |
 
-When a read stream has been paused, it is possible to ask for a certain number of elements to be fetched, which is a form of asynchronous pulling. This means that a processor can ask for elements using *fetch*, setting its own pace. You will see concrete examples of that in the last section of this chapter.
+当读取流暂停时，可以请求获取一定数量的元素，这是异步拉取的一种形式。这意味着处理器可以使用**fetch**请求元素，设置自己的速度。你将在本章的最后一节看到具体的例子。
 
-In any case, calling *resume()* causes the stream to start pushing data again as fast as it can.
+在任何情况下，调用 **resume()** 会导致流再次开始以尽可能快的速度推送数据。
 
-Table 4.5 shows the corresponding back-pressure management methods for *Write-Stream*.
+**表 4.5** 显示了 *Write-Stream* 对应的背压管理方法。
 
-**Table 4.5  WriteStream back-pressure management methods**
+**表 4.5 WriteStream 背压管理方式**
 
-| **Method**                  | **Description**                                              |
-| --------------------------- | ------------------------------------------------------------ |
-| setWriteQueueMaxSize(int)   | Defines what the maximum write buffer queue size should be before being considered full. This is a size in terms of queued Vert.x buffers to be written, not a size in terms of actual bytes, because the queued buffers may be of different sizes. |
-| boolean writeQueueFull()    | Indicates when the write buffer queue size is full.          |
-| drainHandler(Handler<Void>) | Defines a callback indicating when the write buffer queue has been drained (typically when it is back to half of its maximum size). |
+|           **方法**           |                                                                  **描述**                                                                  |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| setWriteQueueMaxSize(int)   | 定义在被视为已满之前，最大写入缓冲区队列大小应该是多少。 这是要写入的排队 Vert.x 缓冲区的大小，而不是实际字节的大小，因为排队的缓冲区可能具有不同的大小。 |
+| boolean writeQueueFull()    | 指示写缓冲区队列大小何时已满。                                                                                                                |
+| drainHandler(Handler<Void>) | 定义一个回调函数，当写缓冲区队列被清空时被调用(通常是当它返回到其最大大小的一半时)。                                                                |
 
-The write buffer queue has a maximum size after which it is considered to be full. Write queues have default sizes that you will rarely want to tweak, but you can do so if you want to. Note that writes can still be made, and data will accumulate in the queue. A writer is supposed to check when the queue is full, but there is no enforcement on writes. When the writer knows that the write queue is full, it can be notified through a *drain handler* when data can be written again. In general this happens when half the write queue has been drained.
+写缓冲区队列有一个最大大小，超过这个大小就认为已满。写队列有默认的大小，您很少想要调整，但是如果您愿意，您可以这样做。注意，仍然可以进行写操作，数据将在队列中累积。写入器应该检查队列何时已满，但没有强制写入。当写入器知道写入队列已满时，可以通过**drain handler**通知当写队列清空时来调用此回调函数。通常，当写队列的一半被耗尽时，就会发生这种情况。
 
-Now that you have seen the back-pressure operations provided in *ReadStream* and *WriteStream*, here is the recipe for controlling the flow in our example of providing ISO images via HTTP:
+现在您已经了解了 *ReadStream* 和 *WriteStream* 中提供的背压操作，下面是我们通过 HTTP 提供 ISO 映像的示例中控制流程的方法：
+  + 1. 对于每个读取缓冲区，将其写入 HTTP 响应流。
+  + 2. 检查写入缓冲区队列是否已满。
+  + 3. 如果满了
+    - a. 暂停文件读取流。
+    - b. 安装一个**drain handler**处理程序，当它被调用时恢复文件读取流。
 
-  **1** For each read buffer, write it to the HTTP response stream.
+请注意，这种背压管理策略并不总是您所需要的：
+  - 在某些情况下，当写入队列已满时丢弃数据在功能上是正确的，甚至是可取的。
+  - 有时事件源不像 Vert.x ReadStream 那样支持暂停，即使可能导致内存耗尽，您也需要在丢弃数据或缓冲之间做出选择。
 
-  **2** Check if the write buffer queue is full.
+处理**背压**的适当策略取决于您正在编写的代码的功能要求。 一般来说，您会更喜欢 Vert.x 流提供的流控制，但是当这不可能时，您将需要采用另一种策略。
 
-  **3** If it is full
+现在让我们将我们看到的所有内容组装到一个应用程序中。
 
-​    **a** Pause the file read stream.
+## 4.3 做一个音乐流媒体点唱机
 
-​    **b** Install a drain handler that resumes the file read stream when it is called.
+我们将通过音乐流点唱机的例子来说明 Vert.x 流和背压管理（**见图 4.2**）。
 
-Note that this back-pressure management strategy is not always what you need:
-   - There may be cases where dropping data when a write queue is full is functionally correct and even desirable.
-  - Sometimes the source of events does not support pausing like a Vert.x ReadStream does, and you will need to choose between dropping data or buffering even if it may cause memory exhaustion.
+这个想法是点唱机在本地存储了一些 MP3 文件，客户端可以通过 HTTP 连接以收听流。 单个文件也可以通过 HTTP 下载。 反过来，控制何时播放、暂停和安排歌曲是通过一个简单的基于文本的 TCP 协议进行的。 所有连接的播放器将同时收听相同的音频，除了由于播放器放置的缓冲导致的轻微延迟。
 
-The appropriate strategy for dealing with *back-pressure* depends on the functional requirements of the code you are writing. In general, you will prefer flow control like Vert.x streams offer, but when that’s not possible, you will need to adopt another strategy.
-
-Let’s now assemble all that we’ve seen into an application.
-
-## 4.3 Making a music-streaming jukebox
-
-We are going to illustrate Vert.x streams and back-pressure management through the example of a music-streaming jukebox (see figure 4.2).
-
-The idea is that the jukebox has a few MP3 files stored locally, and clients can connect over HTTP to listen to the stream. Individual files can also be downloaded over HTTP. In turn, controlling when to play, pause, and schedule a song happens over a simple, text-based TCP protocol. All connected players will be listening to the same audio at the same time, apart from minor delays due to the buffering put in place by the players.
-
-This example will allow us to see how we can deal with custom flow pacing and different back-pressure management strategies, and also how to parse streams.
+这个例子将让我们看到如何处理自定义流节奏和不同的背压管理策略，以及如何解析流。
 
 ![](Chapter4-AsynchronousData.assets/Figure_4_2.png)
 
-### 4.3.1 Features and usage
+### 4.3.1 功能和使用
 
-The application that we will build can be run from the code in the book’s GitHub repository using a Gradle task, as shown in the console output of listing 4.3.
+我们将构建的应用程序可以使用 Gradle 任务从本书 GitHub 存储库中的代码运行，如**清单 4.3** 的控制台输出所示。
 
->  **🏷注意:** You will need to copy some of your MP3 files to a folder named tracks/ in the project directory if you want the jukebox to have music to play.
+>  **🏷注意:** 如果您希望点唱机播放音乐，您需要将一些 MP3 文件复制到项目目录中名为 `track/` 的文件夹中。
 
 ![](Chapter4-AsynchronousData.assets/Listing_4_3.png)
 
-There are two verticles being deployed in this application:
-  - *Jukebox* provides the main music-streaming logic and HTTP server interface for music players to connect to.
- - *NetControl* provides a text-based TCP protocol for remotely controlling the jukebox application.
+此应用程序中部署了两个 Verticle：
+  - **Jukebox** 提供了主要的音乐流媒体逻辑和HTTP服务器接口，供音乐播放器连接。
+ - **NetControl** 提供一个基于文本的TCP协议，用于远程控制点唱机应用程序。
 
 ![](Chapter4-AsynchronousData.assets/Figure_4_3.png)
 
-To listen to music, the user can connect a player such as VLC (see figure 4.3) or even open a web browser directly at http://localhost:8080/.
+要听音乐，用户可以连接VLC等播放器(**见图4.3**)，甚至可以直接在`http://localhost:8080/`上打开web浏览器。
 
-On the other hand, the player can be controlled via a tool like *netcat*, with plain text commands to list all files, schedule a track to be played, and pause or restart the stream. Listing 4.4 shows an interactive session using *netcat*.
+另一方面，玩家可以通过**netcat**这样的工具来控制，使用纯文本命令来列出所有文件，安排播放的曲目，以及暂停或重新启动流。**清单4.4** 显示了使用**netcat**的交互式会话。
 
 ![](Chapter4-AsynchronousData.assets/Listing_4_4.png)
 
->  **💡提示:** *netcat* may be available as nc on your Unix environment. I am not aware of a friendly and equivalent tool for Windows, outside of a WSL environment.
+>  **💡提示:** *netcat* 可能在您的 Unix 环境中以 nc 的形式提供。 在 WSL 环境之外，我不知道有适用于 Windows 的友好且等效的工具。
 
-Finally, we want to be able to download any MP3 for which we know the filename over HTTP:
+最后，我们希望能够通过 HTTP 下载我们知道文件名的任何 MP3：
 
 ```bash
 curl -o out.mp3 http://localhost:8080/download/intro.mp3
 ```
 
-Let’s now dissect the various parts of the implementation.
+现在让我们剖析实现的各个部分。
 
-### 4.3.2 HTTP processing: The big picture
+### 4.3.2 HTTP处理: 总体情况
 
-There will be many code snippets referring to HTTP server processing, so it is good to look at figure 4.4 to understand how the next pieces of code will fit together.
+将有许多代码片段涉及到HTTP服务器处理，因此最好查看**图4.4**，以理解下一段代码如何组合在一起。
 
-There are two types of incoming HTTP requests: either a client wants to directly download a file by name, or it wants to join the audio stream. The processing strategies are very different.
+有两种类型的传入 HTTP 请求：客户端想要直接按名称下载文件，或者想要加入音频流。 处理策略非常不同。
 
-In the case of downloading a file, the goal is to perform a direct copy from the file read stream to the HTTP response write stream. This will be done with *back-pressure* management to avoid excessive buffering.
+在下载文件的情况下，目标是执行从文件读取流到 HTTP 响应写入流的直接复制。 这将通过**背压**管理来完成，以避免过度缓冲。
 
-Streaming is a bit more involved, as we need to keep track of all the streamers’ HTTP response write streams. A timer periodically reads data from the current MP3 file, and the data is duplicated and written for each streamer.
+流式传输涉及更多，因为我们需要跟踪所有流式传输器的 HTTP 响应写入流。 计时器定期从当前 MP3 文件中读取数据，并为每个流媒体复制和写入数据。
 
-Let’s look at how these parts are implemented.
+让我们看看这些部分是如何实现的。
 
 ![](Chapter4-AsynchronousData.assets/Figure_4_4.png)
 
 
 
-### 4.3.3 Jukebox verticle basics
+### 4.3.3 Jukebox Verticle 基础知识
 
-The next listing shows that the state of the Jukebox verticle class is defined by a play status and a playlist.
+下一个清单显示 Jukebox Verticle 类的状态由播放状态和播放列表定义。
 
 ![](Chapter4-AsynchronousData.assets/Listing_4_5.png)
 
-An enumerated type, *State*, defines two states, while a *Queue* holds all scheduled tracks to be played next. Again, the Vert.x threading model ensures single-threaded access, so there is no need for concurrent collections and critical sections.
+枚举类型 *State* 定义了两种状态，而 *Queue* 保存了接下来要播放的所有预定曲目。 同样，Vert.x 线程模型确保单线程访问，因此不需要并发集合和临界区。
 
-The *start* method of the *Jukebox* verticle (listing 4.6) needs to configure a few event-bus handlers that correspond to the commands and actions that can be used from the TCP text protocol. The *NetControl* verticle, which we will dissect later, deals with the inners of the TCP server and sends messages to the event bus.
+*Jukebox* verticle（清单 4.6）的 *start* 方法需要配置一些事件总线处理程序，这些处理程序对应于可以从 TCP 文本协议使用的命令和操作。 我们稍后会剖析的 *NetControl* verticle 处理 TCP 服务器的内部并将消息发送到事件总线。
 
 ![](Chapter4-AsynchronousData.assets/Listing_4_6.png)
 
-Note that because we’ve abstracted the transfer of commands over the event-bus, we can easily plug in new ways to command the jukebox, such as using mobile applications, web applications, and so on.
+请注意，因为我们已经抽象了事件总线上的命令传输，所以我们可以轻松插入新的方式来命令点唱机，例如使用移动应用程序、Web 应用程序等。
 
-The following listing provides the play/pause and schedule handlers. These methods directly manipulate the play and playlist state.
+以下清单提供了播放/暂停和调度处理程序。 这些方法直接操纵播放和播放列表状态。
 
 ![](Chapter4-AsynchronousData.assets/Listing_4_7.png)
 
-Listing the available files is a bit more involved, as the next listing shows.  
+列出可用的文件有点复杂，如下面的清单所示。
 
 ![](Chapter4-AsynchronousData.assets/Listing_4_8.png)
 
-### 4.3.4 Incoming HTTP connections
+### 4.3.4 传入的HTTP连接
 
-There are two types of incoming HTTP clients: either they want the audio stream or they want to download a file.
+有两种类型的传入HTTP客户端:他们要么想要音频流，要么想要下载文件。
 
-The HTTP server is started in the start method of the verticle (see the next listing).
+HTTP服务器在verticle的`start`方法中启动(参见下一个清单)。
 
 ![](Chapter4-AsynchronousData.assets/Listing_4_9.png)
 
-The request handler used by the Vert.x HTTP server is shown in the following listing. It forwards HTTP requests to the *openAudioStream* and *download* utility methods, which complete the requests and proceed.
+Vert.x HTTP服务器使用的请求处理程序如下面的清单所示。它将HTTP请求转发到*openAudioStream*和*download*实用程序方法，这些方法完成请求和进行处理。
 
 ![](Chapter4-AsynchronousData.assets/Listing_4_10.png)
 
-The implementation of the openAudioStream method is shown in the following listing. It prepares the stream to be in chunking mode, sets the proper content type, and sets the response object aside for later.
+**openAudioStream**方法的实现如下所示。它将流准备为分块模式，设置适当的内容类型，并将响应对象留到以后使用。
 
 ![](Chapter4-AsynchronousData.assets/Listing_4_11.png)
 
-### 4.3.5 Downloading as efficiently as possible
+### 4.3.5 尽可能高效地下载
 
-Downloading a file is a perfect example where back-pressure management can be used to coordinate a source stream (the file) and a sink stream (the HTTP response).
+下载文件就是一个很好的例子，可以使用背压管理来协调源流（文件）和接收器流（HTTP 响应）。
 
-The following listing shows how we look for the file, and when it exists, we forward the final download duty to the *downloadFile* method.
+以下清单显示了我们如何查找文件，当它存在时，我们将最终下载任务转发给 **downloadFile** 方法。
 
 ![](Chapter4-AsynchronousData.assets/Listing_4_12.png)
 
-The implementation of the downloadFile method is shown in the following listing.
+**downloadFile** 方法的实现如以下清单所示。
 
 ![](Chapter4-AsynchronousData.assets/Listing_4_13.png)
 
-Back-pressure is taken care of while copying data between the two streams. This is so commonly done when the strategy is to pause the source and not lose any data that the same code can be rewritten as in the following listing.
+在两个流之间复制数据时，要注意背压。当策略是暂停源且不丢失任何数据时，通常会这样做，因此可以重写相同的代码，如以下清单所示。
 
 ![](Chapter4-AsynchronousData.assets/Listing_4_14.png)
 
-A pipe deals with back-pressure when copying between a pausable *ReadStream* and a *WriteStream*. It also manages the end of the source stream and errors on both streams. The code of listing 4.14 does exactly what’s shown in listing 4.13, but without the boilerplate. There are other variants of *pipeTo* for specifying custom handlers.
+在可暂停的 **ReadStream** 和 **WriteStream** 之间进行复制时，管道会处理背压。 它还管理源流的结束和两个流上的错误。 **清单 4.14** 的代码与 **清单 4.13** 中的代码完全相同，但没有使用样板文件。 **pipeTo** 还有其他变体用于指定自定义处理程序。
 
-### 4.3.6 Reading MP3 files, but not too fast
+### 4.3.6 读取 MP3 文件，但不会太快
 
-MP3 files have a header containing metadata such as the artist name, genre, bit rate, and so on. Several frames containing compressed audio data follow, which decoders can turn into *pulse-code modulation* data, which can eventually be turned into sound.
+MP3 文件的标题包含元数据，例如艺术家姓名、流派、比特率等。 随后是几个包含压缩音频数据的帧，解码器可以将其转换为**脉冲编码调制**数据，最终可以转换为声音。
 
-MP3 decoders are very resilient to errors, so if they start decoding in the middle of a file, they will still manage to figure out the bit rate, and they will align with the next frame to start decoding the audio. You can even concatenate multiple MP3 files and send them to a player. The audio will be decoded as long as all files are using the same bit rate and stereo mode.
+MP3 解码器对错误非常有弹性，因此如果它们在文件中间开始解码，它们仍然会设法计算出比特率，并且它们将与下一帧对齐以开始解码音频。 您甚至可以连接多个 MP3 文件并将它们发送到播放器。 只要所有文件都使用相同的比特率和立体声模式，音频就会被解码。
 
-This is interesting for us as we design a music-streaming jukebox: if our files have been encoded in the same way, we can simply push each file of a playlist one after the other, and the decoders will handle the audio just fine.
+当我们设计一个音乐流点唱机时，这对我们来说很有趣：如果我们的文件以相同的方式编码，我们可以简单地一个接一个地推送播放列表中的每个文件，解码器就会很好地处理音频。
 
-**WHY BACK-PRESSURE ALONE IS NOT ENOUGH**
+**为什么单靠背压是不够的**
 
-Feeding MP3 data to many connected players is not as simple as it may seem. The main issue is ensuring that all current and future players are listening to the same music at roughly the same time. All players have different local buffering strategies to ensure smooth playback, even when the network suffers delays, but if the server simply pushes files as fast as it can, not all clients will be synchronized. Worse, when a new player connects, it may receive nothing to play while the current players have several minutes of music remaining in their buffers. To provide a sensible playback experience, we need to control the pace at which files are read, and for that we will use a timer.
+将 MP3 数据提供给许多连接的播放器并不像看起来那么简单。 主要问题是确保所有当前和未来的玩家在大致相同的时间收听相同的音乐。 所有播放器都有不同的本地缓冲策略以确保流畅播放，即使网络出现延迟，但如果服务器只是尽可能快地推送文件，则并非所有客户端都会同步。 更糟糕的是，当一个新的播放器连接时，它可能不会收到任何可播放的内容，而当前播放器的缓冲区中还有几分钟的音乐。 为了提供合理的播放体验，我们需要控制读取文件的速度，为此我们将使用计时器。
 
-This is illustrated in figure 4.5, which shows what happens *without* and *with* rate control on the streams. In both cases, suppose that Player A joined the stream at the beginning, while Player B joined, say, 10 seconds later. Without read-rate control, we find ourselves in a similar case to that of downloading an MP3 file. We may have backpressure in place to ensure efficient resource usage while copying MP3 data chunks to the connected clients, but the streaming experience will be very bad.
+这在**图 4.5** 中进行了说明，它显示了在流上 **没有** 和 **有** 速率控制所发生的情况。 在这两种情况下，假设玩家 A 在开始时加入了流，而玩家 B 在 10 秒后加入。 如果没有读取速率控制，我们会发现自己处于与下载 MP3 文件类似的情况。 在将 MP3 数据块复制到连接的客户端时，我们可能会设置背压以确保高效的资源使用，但流媒体体验会非常糟糕。
 
-Since we are basically streaming data as fast as we can, Player A finds its internal buffers filled with almost all the current file data. While it may be playing at position 0 minutes 15 seconds, it has already received data beyond the 3-minute mark. When Player B joins, it starts receiving MP3 data chunks from much farther on in the file, so it starts playing at position 3 minutes and 30 seconds. If we extend our reasoning to multiple files, a new player can join and receive no data at all, while the previously connected players may have multiple songs to play in their internal buffers.
+由于我们基本上以尽可能快的速度流式传输数据，播放器 A 发现其内部缓冲区充满了几乎所有当前文件数据。 虽然它可能在 0 分 15 秒的位置播放，但它已经接收到超过 3 分钟标记的数据。 当播放器 B 加入时，它开始从文件中更远的地方接收 MP3 数据块，因此它在 3 分 30 秒的位置开始播放。 如果我们将推理扩展到多个文件，则新播放器可以加入并且根本不接收数据，而之前连接的播放器可能在其内部缓冲区中播放多首歌曲。
 
-By contrast, if we control the read rate of the MP3 file, and hence the rate at which MP3 chunks are being copied and written to the connected players, we can ensure that they are all, more or less, at the same position.
+相比之下，如果我们控制 MP3 文件的读取速率，从而控制 MP3 块被复制和写入连接的播放器的速率，我们可以确保它们或多或少都在相同的位置。
 
 ![](Chapter4-AsynchronousData.assets/Figure_4_5.png)
 
-Rate control here is all about ensuring that all players receive data fast enough so that they can play without interruption, but not too quickly so they do not buffer too much data.
+这里的速率控制就是确保所有播放器都足够快地接收数据，以便他们可以不间断地播放，但不能太快，以免缓冲太多数据。
 
-**RATE-LIMITED STREAMING IMPLEMENTATION**
+**速率限制的流媒体实现**
 
-Let’s look at the complete *Jukebox* verticle start method, as it shows that much needed timer.
+让我们看看完整的 *Jukebox* verticle的 `start` 方法，因为它显示了非常需要的计时器。
 
 ![](Chapter4-AsynchronousData.assets/Listing_4_15.png)
 
-Beyond connecting the event-bus handlers and starting an HTTP server, the *start* method also defines a timer so that data is streamed every 100 milliseconds.
+除了连接事件总线处理程序和启动 HTTP 服务器之外，**start** 方法还定义了一个计时器，以便每 100 毫秒传输一次数据。
 
-Next, we can look at the implementation of the *streamAudioChunk* method.
+接下来，我们可以看看 **streamAudioChunk** 方法的实现。
 
 ![](Chapter4-AsynchronousData.assets/Listing_4_16.png)
 
-**Why these values?**
+**为什么是这些值？**
 
->  Why do we read data every 100 milliseconds? And why read buffers of 4096 bytes?
+>  为什么我们每 100 毫秒读取一次数据？ 为什么要读取 4096 字节的缓冲区？
 >  
->  I have empirically found these values work well for 320 KBps constant bit rate MP3 files on my laptop. They ensured no drops in tests while preventing players from buffering too much data, and thus ending several seconds apart in the audio stream.
+>  我根据经验发现，这些值对于我的笔记本电脑上的320kbps恒定比特率的MP3文件很好用。它们确保测试中不会出现下降，同时防止玩家缓冲过多数据，从而在音频流中间隔数秒结束。
 >  
->  Feel free to tinker with these values as you run the examples.
+>  在运行示例时，您可以随意修改这些值。
 >  
 
-The code of *streamAudioChunk* reads blocks of, at most, 4096 bytes. Since the method will always be called 10 times per second, it also needs to check whether anything is being played at all. The *processReadBuffer* method streams data, as shown in the following listing.
+**streamAudioChunk** 的代码读取最多 4096 字节的块。 由于该方法将始终每秒调用 10 次，因此还需要检查是否正在播放任何内容。 **processReadBuffer** 方法流式传输数据，如下面的清单所示。
 
 ![](Chapter4-AsynchronousData.assets/Listing_4_17.png)
 
-For every HTTP response stream to a player, the method copies the read data. Note that we have another case of back-pressure management here: when the write queue of a client is full, we simply discard data. On the player’s end, this will result in audio drops, but since the queue is full on the server, it means that the player will have delays or drops anyway. Discarding data is fine, as MP3 decoders know how to recover, and it ensures that playback will remain closely on time with the other players.
+对于播放器的每个 HTTP 响应流，该方法都会复制读取的数据。 请注意，这里还有一种背压管理的情况：当客户端的写入队列已满时，我们只是简单地丢弃数据。 在播放器端，这会导致音频掉线，但由于服务器上的队列已满，这意味着播放器无论如何都会有延迟或掉线。 丢弃数据很好，因为 MP3 解码器知道如何恢复，并且它确保播放将与其他播放器保持紧密的时间。
 
->  **☢警告:** Vert.x buffers cannot be reused once they have been written, as they are placed in a write queue. Reusing buffers will always result in bugs, so don’t look for unnecessary optimizations here.
+>  **☢警告:** Vert.x 缓冲区一旦被写入就不能重复使用，因为它们被放置在写入队列中。 重用缓冲区总是会导致错误，所以不要在这里寻找不必要的优化。
 
-Finally, the helper methods in the following listing enable the opening and closing of files.
+最后，以下清单中的辅助方法可以打开和关闭文件。
 
 ![](Chapter4-AsynchronousData.assets/Listing_4_18.png)
 
-## 4.4 Parsing simple streams
+## 4.4 解析简单的流
 
-So far our dissection of the jukebox example has focused on the *Jukebox* verticle used to download and stream MP3 data. Now it’s time to dissect the *NetControl* verticle, which exposes a TCP server on port 3000 for receiving text commands to control what the jukebox plays. Extracting data from asynchronous data streams is a common requirement, and Vert.x provides effective tools for doing that.
+到目前为止，我们对自动点唱机示例的剖析主要集中在用于下载和流式传输 MP3 数据的 *Jukebox* verticle。 现在是剖析 *NetControl* verticle 的时候了，它在端口 3000 上公开了一个 TCP 服务器，用于接收文本命令来控制点唱机播放的内容。 从异步数据流中提取数据是一种常见的需求，Vert.x 提供了有效的工具来做到这一点。
 
-The commands in our text protocol are of the following form:
+我们的文本协议中的命令具有以下形式：
 
 ```
 /action [argument]
 ```
 
-These are the actions:
-  - /list—Lists the files available for playback
-  - /play—Ensures the stream plays
-  - /pause—Pauses the stream
-  - /schedule file—Appends file at the end of the playlist
+这些是动作：
+  - /list - 列出可播放的文件
+  - /play - 播放流
+  - /pause - 暂停流
+  - /schedule file - 在播放列表的末尾追加文件
 
-Each text line can have exactly one command, so the protocol is said to be *newline-separated*.
+每个文本行只能有一个命令，因此该协议被称为*换行分隔*。
 
-We need a parser for this, as buffers arrive in chunks that rarely correspond to one line each. For example, a first read buffer could contain the following:
+我们需要一个解析器，因为缓冲区以块的形式到达，每个块很少对应一行。 例如，第一个读取缓冲区可能包含以下内容：
 
 ```
 ettes.mp3
@@ -415,116 +409,116 @@ ettes.mp3
 /pa
 ```
 
-The next one may look like this:
+下一个可能看起来像这样：
 
 ```
 use
 /schedule right-here-righ
 ```
 
-And it may be followed by this:
+后面可能会这样：
 
 ```
 t-now.mp3
 ```
 
-What we actually want is reasoning about *lines*, so the solution is to concatenate buffers as they arrive, and split them again on newlines so we have one line per buffer. Instead of manually assembling intermediary buffers, Vert.x offers a handy parsing helper with the *RecordParser* class. The parser ingests buffers and emits new buffers with parsed data, either by looking for delimiters or by working with chunks of fixed size.
+我们真正想要的是对 **行** 进行推理，因此解决方案是在缓冲区到达时将它们连接起来，然后在换行符上再次拆分它们，这样每个缓冲区就有一行。 Vert.x 没有手动组装中间缓冲区，而是通过 *RecordParser* 类提供了一个方便的解析助手。 解析器通过查找分隔符或使用固定大小的块来摄取缓冲区并发出带有解析数据的新缓冲区。
 
-In our case, we need to look for newline delimiters in the stream. The following listing shows how to use *RecordParser* in the *NetControl* verticle.
+在我们的例子中，我们需要在流中寻找换行符。 以下清单显示了如何在 *NetControl* verticle 中使用 **RecordParser**。
 
 ![](Chapter4-AsynchronousData.assets/Listing_4_19.png)
 
-The parser is both a read and a write stream, as it functions as an adapter between two streams. It ingests intermediate buffers coming from the TCP socket, and it emits parsed data as new buffers. This is fairly transparent and simplifies the rest of the verticle implementation.
+解析器既是读取流又是写入流，因为它充当两个流之间的适配器。 它摄取来自 TCP 套接字的中间缓冲区，并将解析的数据作为新缓冲区发出。 这是相当透明的并且简化了verticle实现的其余部分。
 
-In the next listing, each buffer is known to be a line, so we can go directly to processing commands.
+在下一个清单中，每个缓冲区都被称为一行，因此我们可以直接处理命令。
 
 ![](Chapter4-AsynchronousData.assets/Listing_4_20.png)
 
-The simple commands are in the case clauses, and the other commands are in separate methods shown in the following listing.
+简单命令位于 case 子句中，其他命令位于单独的方法中，如下表所示。
 
 ![](Chapter4-AsynchronousData.assets/Listing_4_21.png)
 
-## 4.5 Parsing complex streams
+## 4.5 解析复杂的流
 
-Streams can be more complex than just lines of text, and *RecordParser* can also simplify our work with these. Let’s take the example of key/value database storage, where each key and value is a string.
+流可以比文本行更复杂，*RecordParser* 也可以简化我们的工作。 让我们以键/值数据库存储为例，其中每个键和值都是一个字符串。
 
-In such a database, we could have entries such as `1 -> {foo}` and `2 -> {bar, baz}`, with 1 and 2 being keys. There are countless ways to define a serialization scheme for this type of data structure, so imagine that we must use the stream format in table 4.6.
+在这样的数据库中，我们可以有诸如 `1 -> {foo}` 和 `2 -> {bar, baz}` 之类的条目，其中 1 和 2 是键。 为这种类型的数据结构定义序列化方案有无数种方法，所以想象一下我们必须使用**表 4.6** 中的流格式。
 
-**Table 4.6 Database stream format**
+**表 4.6 数据库流格式**
 
-| **Data**     | **Description**                                              |
-| ------------ | ------------------------------------------------------------ |
-| Magic header | A sequence of bytes 1, 2, 3, and 4 to identify the file type |
-| Version      | An integer with the database stream format version           |
-| Name         | Name of the database as a string,  ending with a newline  character |
-| Key length   | Integer with the number of characters for the next  key      |
-| Key name     | A sequence of characters for the key name                    |
-| Value length | Integer with the number of characters for the next  value    |
-| Value        | A sequence of characters for the value                       |
-| (…)          | Remaining {key, value} sequences                             |
+| **数据** | **描述**                                       |
+| -------- | ---------------------------------------------- |
+| 幻数头   | 用于标识文件类型的字节 1、2、3 和 4 序列       |
+| 版本     | 带有数据库流格式版本的整数                     |
+| 名称     | 以字符串形式显示的数据库名称，以**换行符**结束 |
+| 键长度   | 整数，键的字符数                               |
+| 键名称   | 键名的字符序列                                 |
+| 值长度   | 整数，值的字符数                               |
+| 值       | 值的字符序列                                   |
+| (…)      | 剩下的{key, value}序列                         |
 
-The format mixes binary and text records, as the stream starts with a magic number, a version number, a name, and then a sequence of key and value entries. While the format in itself is questionable on some points, it is a good example to illustrate more complex parsing.
+这种格式混合了二进制和文本记录，因为流以一个幻数、一个版本号、一个名称开始，然后是一系列键和值条目。虽然格式本身在某些方面存在问题，但它是一个演示更复杂解析的好例子。
 
-First of all, let’s have a program that writes a database to a file with two key/value entries. The following listing shows how to use the Vert.x filesystem APIs to open a file, append data to a buffer, and then write it.
+首先，让我们编写一个程序，将一个数据库写入一个文件，其中包含两个键/值条目。下面的清单展示了如何使用Vertx文件系统api打开文件，将数据追加到缓冲区，然后写入它。
 
 ![](Chapter4-AsynchronousData.assets/Listing_4_22.png)
 
-In this example we had little data, so we used a single buffer that we prepared wholly before writing it to the file, but we could equally use a buffer for the header and new buffers for each key/value entry.
+在这个例子中，我们只有很少的数据，所以我们使用了一个在将数据写入文件之前完全准备好的缓冲区，但我们也可以同样地使用一个缓冲区用于头文件，并为每个键/值条目使用新缓冲区。
 
-Writing is easy, but what about reading it back? The interesting property of *RecordParser* is that its parsing mode can be switched on the fly. We can start parsing buffers of fixed size 5, then switch to parsing based on tab characters, then chunks of 12 bytes, and so on.
+写很容易，但是读回来呢？ **RecordParser** 类的有趣特性是它的解析模式可以动态切换。 我们可以开始解析固定大小为 5 的缓冲区，然后切换到基于制表符的解析，然后是 12 字节的块，依此类推。
 
-The parsing logic is better expressed by splitting it into methods where each method corresponds to a parsing state: a method for parsing the database name, a method for parsing a value entry, and so on.
+解析逻辑通过拆分成方法更好地表达，每个方法对应一个解析状态：解析数据库名称的方法，解析值条目的方法，等等。
 
-The following listing opens the file that we previously wrote and puts the *RecordParser* object into fixed mode, as we are looking for a sequence of four bytes that represents the magic header. The handler that we install is called when a magic number is read.
+下面的清单打开了我们之前编写的文件，并将*RecordParser*对象置于固定模式，因为我们正在寻找一个代表魔法头的四个字节的序列。当读取幻数时，将调用我们安装的处理程序。
 
 ![](Chapter4-AsynchronousData.assets/Listing_4_23.png)
 
-The next listing provides the implementation of further methods.
+下一个清单提供了更多方法的实现。
 
 ![](Chapter4-AsynchronousData.assets/Listing_4_24.png)
 
-The *readMagicNumber* method extracts the four bytes of the magic number from a buffer. We know that the buffer is exactly four bytes since the parser was in fixed-sized mode.
+*readMagicNumber* 方法从缓冲区中提取幻数的四个字节。 我们知道缓冲区正好是四个字节，因为解析器处于固定大小模式。
 
-The next entry is the database version, and it is an integer, so we don’t have to change the parser mode because an integer is four bytes. Once the version has been read, the *readVersion* method switches to delimited mode to extract the database name. We then start looking for a key length, so we need a fixed-sized mode in *readName*.
+下一个条目是数据库版本，它是一个整数，所以我们不必更改解析器模式，因为整数是四个字节。 读取版本后，*readVersion* 方法切换到分隔模式以提取数据库名称。 然后我们开始寻找键长度，因此我们需要在 *readName* 中使用固定大小的模式。
 
-The following listing reads the key name, the value length, and the proper value, and *finishEntry* sets the parser to look for an integer and delegates to *readKey*.
+下面的清单读取键名、值长度和正确的值，*finishEntry* 设置解析器查找整数并委托给 *readKey*。
 
 ![](Chapter4-AsynchronousData.assets/Listing_4_25.png)
 
-The next listing shows some sample output when reading the database file with the parsing methods of listings 4.23 through 4.25.
+下一个清单显示了使用**清单 4.23** 到 **4.25** 的解析方法读取数据库文件时的一些示例输出。
 
 ![](Chapter4-AsynchronousData.assets/Listing_4_26.png)
 
-These on-the-fly parser mode and handler changes form a very simple yet effective way to parse complex streams.
+这些动态解析器模式和处理程序的更改形成了一种非常简单而有效的解析复杂流的方法。
 
->  **💡提示:** You may wonder how the parsing mode can be changed on the fly, while some further data is already available to the parser from the read stream. Remember that we are on an event loop, so parser handlers are processing parser records one at a time. When we switch from, say, delimiter mode to fixed-size mode, the next record is emitted by processing the remaining stream data based on a number of bytes rather than looking for a string. The same rea- soning applies when switching from fixed-sized mode to delimiter mode.
+>  **💡提示:** 您可能想知道如何动态更改解析模式，而解析器已经可以从读取流中获得更多数据。 请记住，我们处于事件循环中，因此解析器处理程序一次处理一个解析器记录。 当我们从分隔符模式切换到固定大小模式时，下一条记录是通过根据字节数处理剩余的流数据而不是查找字符串来发出的。 当从固定大小模式切换到定界符模式时，同样的道理也适用。
 
-## 4.6 A quick note on the stream fetch mode
+## 4.6 关于流获取模式的快速说明
 
-Before we wrap up this chapter, let’s go back to a detail of the *ReadStream* interface that I deliberately left aside.
+在结束本章之前，让我们回到我故意搁置一旁的 *ReadStream* 接口的细节。
 
-Introduced in Vert.x 3.6, the fetch mode that I mentioned earlier in this chapter allows a stream consumer to request a number of data items, rather than the stream pushing data items to the consumer. This works by pausing the stream and then ask- ing for a varying number of items to be fetched later on, as data is needed.
+在Vert.x 3.6中引入了我在本章前面提到的**fetch**模式，它允许流消费者请求许多数据项，而不是流将数据项推给消费者。它的工作原理是暂停流，然后在需要数据时请求随后获取不同数量的项。
 
-We could rewrite the jukebox file-streaming code with the fetch mode, but we would still need a timer to dictate the pace. In this case, manually reading a buffer of 4096 bytes or requesting 4096 to be fetched is not that different.
+我们可以使用 **fetch** 模式重写点唱机文件流代码，但我们仍然需要一个计时器来指示速度。 在这种情况下，手动读取 4096 字节的缓冲区或请求获取 4096 并没有什么不同。
 
-Instead, let’s go back to the database reading example. The read stream pushed events in listings 4.23 through 4.25. Switching to fetch mode and pulling data does not require many changes. The following listing shows the stream initialization code.
+相反，让我们回到数据库读取示例。 **清单 4.23** 到 **清单4.25** 中的读取流推送事件。 切换到获取模式并拉取数据不需要很多更改。 以下清单显示了流初始化代码。
 
 ![](Chapter4-AsynchronousData.assets/Listing_4_27.png)
 
-Remember that the *RecordParser* decorates the file stream. It is paused, and then the *fetch* method asks for one element. Since the parser emits buffers of parsed data, ask- ing for one element in this example means asking for a buffer of four bytes (the magic number). Eventually, the parser handler will be called to process the requested buffer, and nothing else will happen until another call to the *fetch* method is made.
+请记住，**RecordParser** 修饰文件流。 它被暂停，然后 **fetch** 方法请求一个元素。 由于解析器发出解析数据的缓冲区，因此在本例中请求一个元素意味着请求一个 4 字节的缓冲区（幻数）。 最终，解析器处理程序将被调用来处理请求的缓冲区，并且在再次调用 **fetch** 方法之前不会发生任何其他事情。
 
-The following listing shows two of the parsing handler methods and their adapta- tion to the fetch mode.
+下面的清单显示了两个解析处理程序方法及其对获取模式的适应。
 
 ![](Chapter4-AsynchronousData.assets/Listing_4_28.png)
 
-The only difference between the two modes is that we need to request elements by calling *fetch*. You will not likely need to play with fetch mode while writing Vert.x applications, but if you ever need to manually control a read stream, it is a useful tool to have.
+两种模式的唯一区别是我们需要通过调用 **fetch** 来请求元素。 在编写 Vert.x 应用程序时，您可能不需要使用 **fetch** 模式，但如果您需要手动控制读取流，它是一个有用的工具。
 
-In many circumstances, having data being pushed is all you need, and the requester can manage the back-pressure by signaling when pausing is needed. If you have a case where it is easier for the requester to let the source know how many items it can handle, then pulling data is a better option for managing the back-pressure. Vert.x streams are quite flexible here.
+在许多情况下，您只需要推送数据，请求者可以通过在需要暂停时发出信号来管理背压。 如果您遇到请求者更容易让源知道它可以处理多少项目的情况，那么提取数据是管理背压的更好选择。 Vert.x 流在这里非常灵活。
 
-The next chapter focuses on other models besides callbacks for asynchronous pro- gramming with Vert.x.
+下一章将重点介绍 Vert.x 异步编程回调函数以外的其他模型。
 
-## Summary
-  - Vert.x streams model asynchronous event and data flows, and they can be used in both push and pull/fetch modes.
-  - Back-pressure management is essential for ensuring the coordinated exchange of events between asynchronous systems, and we illustrated this through MP3 audio streaming across multiple devices and direct downloads.
-  - Streams can be parsed for simple and complex data, illustrated here by a net- worked control interface for an audio streaming service.
+## 总结
+  - Vert.x 流模型异步事件和数据流，它们可以用于 push  和 pull/fetch 模式。
+  - 背压管理对于确保异步系统之间的协调事件交换至关重要，我们通过跨多个设备的 MP3 音频流和直接下载来说明这一点。
+  - 流可以被解析为简单和复杂的数据，这里通过音频流服务的网络控制接口来说明。
 
