@@ -2,217 +2,217 @@
 
 **本章涵盖了**
 
-  - How to expose services on top of the event bus
-  - Asynchronous testing of both verticles and event-bus services
+  - 如何在事件总线上公开服务
+  - Verticle 和事件总线服务的异步测试
 
-The event bus is a fundamental tool for articulating event processing in Vert.x, but there is more to it! Event-bus services are useful for exposing typed interfaces rather than plain messaging, especially when multiple message types are expected at an event-bus destination. Testing is also an important concept, and we’ll look at what is different in testing asynchronous Vert.x code compared to traditional testing.
+事件总线是在 Vert.x 中表达事件处理的基本工具，但它还有更多功能！ 事件总线服务对于公开类型化接口而不是简单的消息传递很有用，尤其是在事件总线目标处需要多种消息类型时。 测试也是一个重要的概念，我们将看看测试异步 Vert.x 代码与传统测试有什么不同。
 
-In this chapter we will revisit an earlier example, refactor it into an event-bus service, and test it.
+在本章中，我们将重温前面的示例，将其重构为事件总线服务，并对其进行测试。
 
-## 6.1   Revisiting heat sensors with a service API
+## 6.1   使用服务 API 重新审视热传感器
 
-In chapter 3 we used heat sensors as an example. We had a *SensorData* verticle that kept the last observed values for each sensor and compute their average using request/reply communication on the event bus. The following listing shows the code we used to compute the temperature average.
+在第 3 章中，我们以热传感器为例。 我们有一个 *SensorData* verticle，它保存每个传感器的最后观察值，并使用事件总线上的请求/应答通信计算它们的平均值。 下面的清单显示了我们用来计算温度平均值的代码。
 
 ![](Chapter6-BeyondTheEventBus.assets/Listing_6_1.png)
 
-This code is tightly coupled with the Vert.x event-bus APIs, as it needs to receive a message and reply to it. Any software component willing to call *average* has to send a message over the event bus and expect a response.
+此代码与 Vert.x 事件总线 API 紧密耦合，因为它需要接收消息并回复它。 任何愿意调用 *average* 的软件组件都必须通过事件总线发送消息并期待响应。
 
-But what if we could have a regular Java interface with methods to call, rather than having to send and receive messages over the event bus? The interface proposed in the next listing would be completely agnostic of the event bus.
+但是，如果我们可以拥有一个带有调用方法的常规 Java 接口，而不必通过事件总线发送和接收消息呢？ 下一个清单中提出的接口将与事件总线完全无关。
 
 ![](Chapter6-BeyondTheEventBus.assets/Listing_6_2.png)
 
-The proposed interface has methods with trailing callback parameters so the caller will be notified asynchronously of responses and errors. The *`Handler<AsyncResult<T>>`* type is commonly used for callbacks in Vert.x APIs, where T can be anything but is typically a JSON type.
+提议的接口具有带有尾随回调参数的方法，因此调用者将被异步通知响应和错误。 *`Handler<AsyncResult<T>>`* 类型通常用于 Vert.x API 中的回调，其中 T 可以是任何东西，但通常是 JSON 类型。
 
-The interface of listing 6.2 is what we are aiming for with event-bus services. Let’s revise the heat sensor example, replacing event-bus interactions with a SensorDataService typed Java interface.
+**清单 6.2** 的接口是我们使用事件总线服务的目标。 让我们修改热传感器示例，将事件总线交互替换为 *SensorDataService* 类型的 Java 接口。
 
-## 6.2 Return of the RPCs (remote procedure calls)
+## 6.2 返回 RPC（远程过程调用）
 
-You may already be familiar with *remote procedure calls*, a popular abstraction in distributed computing. RPCs were introduced to hide network communications when you’re calling functions running on another machine (the server). The idea is that a local function acts as a proxy, sending a message with the call arguments over the network to the server, and the server then calls the *real* function. The response is then sent back to the proxy, and the client has the illusion of having called a regular, local function.
+您可能已经熟悉 *远程过程调用*，这是分布式计算中的一种流行抽象。 当您调用在另一台机器（服务器）上运行的函数时，引入了 RPC 来隐藏网络通信。 这个想法是本地函数充当代理，通过网络向服务器发送带有调用参数的消息，然后服务器调用 *real* 函数。 然后将响应发送回代理，客户端会产生调用常规本地函数的错觉。
 
-Vert.x event-bus services are a form of *asynchronous RPC*:
-  - A service encapsulates a set of operations, like *SensorDataService* in listing 6.2.
-  - A service is described by a regular Java API with methods for exposed operations.
-  - Neither the requester nor the implementation need to directly deal with even-tbus messages.
+Vert.x 事件总线服务是一种*异步 RPC*：
+  - 服务封装了一组操作，如**清单 6.2** 中的 *SensorDataService*。
+  - 服务由带有公开操作方法的常规 Java API 描述。
+  - 请求者和实现者都不需要直接处理事件总线消息。
 
-Figure 6.1 illustrates the various components at stake when invoking the *average* method of the *SensorDataService* interface. The client code invokes the *average* method on a service proxy. This is an object that implements the *SensorDataService* interface and then sends a message on the event bus to the *sensor.data-service* destination (this can be configured). The message body contains the method call parameter values, so because *average* only takes a callback, the body is empty. The message also has an *action* header that indicates which method is being called.
+图 6.1 说明了在调用 *SensorDataService* 接口的 *average* 方法时所涉及的各种组件。 客户端代码调用服务代理上的 *average* 方法。 这是一个实现 *SensorDataService* 接口的对象，然后在事件总线上将消息发送到 *sensor.data-service* 目的地（可以配置）。 消息体包含方法调用参数值，所以因为*average*只接受回调，所以消息体为空。 该消息还有一个 *action* 标头，指示正在调用哪个方法。
 
 ![](Chapter6-BeyondTheEventBus.assets/Figure_6_1.png)
 
-A proxy handler listens to the *sensor.data-service* destination and dispatches method calls based on the message’s action header and body. The actual *SensorDataService* implementation is used here, and the *average* method is called. The proxy handler then replies to the event-bus message with a value passed through the *average* method callback. In turn, the client receives the reply through the service proxy, which passes the reply to the callback from the call on the client side.
+代理处理程序侦听 *sensor.data-service* 目标并根据消息的操作标头和正文分派方法调用。 这里使用了实际的 *SensorDataService* 实现，并调用了 *average* 方法。 然后，代理处理程序使用通过 *average* 方法回调传递的值回复事件总线消息。 反过来，客户端通过服务代理接收回复，服务代理将回复传递给来自客户端调用的回调。
 
-This model can simplify dealing with the event bus, especially when many operations need to be exposed. It thus makes sense to define a Java interface as an API rather than manually dealing with messages.
+这种模型可以简化对事件总线的处理，尤其是在需要公开许多操作时。 因此，将 Java 接口定义为 API 而不是手动处理消息是有意义的。
 
-## 6.3 Defining a service interface
+## 6.3 定义服务接口
 
-Listing 6.2 has the interface that we want for *SensorDataService*, but there is a little more code to add. To develop an event-bus service, you need to
-  - Write a Java interface that respects a few conventions
-  - Write an implementation
+清单 6.2 有我们想要的 *SensorDataService* 接口，但还需要添加一些代码。 要开发事件总线服务，您需要
+  - 编写一个尊重一些约定的 Java 接口
+  - 编写一个实现
 
-Vert.x does not rely on magic through bytecode engineering or reflection at runtime, so service proxies and handlers need to be written and compiled. Fortunately, Vert.x comes with code generators, so you will generate both the service proxies and handlers at compilation time rather than write them yourself.
+Vert.x 不依赖于通过字节码工程或运行时反射的魔法，因此需要编写和编译*服务代理* 和 *处理程序*。 幸运的是，Vert.x 带有代码生成器，因此您将在编译时生成服务代理和处理程序，而不是自己编写它们。
 
-The complete *SensorDataService* interface is detailed in the following listing.
+完整的 *SensorDataService* 接口在以下列表中详细说明。
 
 ![](Chapter6-BeyondTheEventBus.assets/Listing_6_3.png)
 
-The *@ProxyGen* annotation is used to mark an event-bus service interface so as to generate the proxy code.
+`@ProxyGen` 注解用于标记事件总线服务接口，以生成代理代码。
 
-You will also need to define a *package-info.java* file and annotate the package definition with *@ModuleGen* to enable the annotation processor, as shown in the next listing.
+您还需要定义一个 `package-info.java` 文件并使用 `@ModuleGen` 注解包定义以启用注解处理器，如下面的清单所示。
 
 ![](Chapter6-BeyondTheEventBus.assets/Listing_6_4.png)
 
-The methods in a service interface need to adhere to a few conventions, notably that of having a callback as the last parameter. You will be tempted to use return values rather than callbacks, but remember that we are dealing with asynchronous operations, so we need callbacks! It is idiomatic for service interfaces to have factory methods for both the service implementations (*create*) and proxies (*createProxy*). These methods greatly simplify the code for either getting a proxy or publishing a service.
+服务接口中的方法需要遵守一些约定，特别是将回调作为最后一个参数。 你会很想使用返回值而不是回调，但请记住，我们正在处理异步操作，所以我们需要回调！ 服务接口具有服务实现 (*create*) 和代理 (*createProxy*) 的工厂方法是**惯用**的。 这些方法极大地简化了获取代理或发布服务的代码。
 
-The *SensorDataServiceVertxEBProxy* class is generated by the Vert.x code generator, and if you peek into it, you will see event-bus operations. There is also a *SensorDataServiceVertxProxyHandler* class that’s generated, but only Vert.x will use it, not your code.
+*SensorDataServiceVertxEBProxy* 类由 Vert.x 代码生成器生成，如果您查看它，您将看到事件总线操作。 还生成了一个 *SensorDataServiceVertxProxyHandler* 类，但只有 Vert.x 会使用它，而不是您的代码。
 
-Let’s now look at the actual service implementation in the *SensorDataServiceImpl* class.
+现在让我们看看 *SensorDataServiceImpl* 类中的实际服务实现。
 
-## 6.4 Service implementation
+## 6.4 服务实现
 
-The following service implementation is a direct adaptation of the code from chapter 3.
+以下服务实现是对第 3 章代码的直接改编。
 
 ![](Chapter6-BeyondTheEventBus.assets/Listing_6_5.png)
 
-Compared to the code of chapter 3, we have mostly replaced the event-bus code with passing asynchronous results via completed future objects. This code is also free from references to the service proxy handler code, which is being generated.
+与第 3 章的代码相比，我们大部分都将事件总线代码替换为通过已完成的future 对象传递异步结果。 此代码也没有对生成的*服务代理处理程序*代码的引用。
 
->  **💡提示:** The code in listing 6.5 is free of asynchronous operations. In more elaborated services, you will quickly stumble upon cases where you issue asynchronous calls to some other component like a database, an HTTP service, a message broker, or even another service over the event bus. Once you have a response ready, you will pass the result or an error to the method callback, just like we did in *SensorDataServiceImpl*.
+>  **💡提示:** 清单 6.5 中的代码没有异步操作。 在更详细的服务中，您会很快发现向其他组件（如数据库、HTTP 服务、消息代理，甚至是事件总线上的其他服务）发出异步调用的情况。 准备好响应后，您会将结果或错误传递给回调方法，就像我们在 *SensorDataServiceImpl* 中所做的那样。
 
-## 6.5 Enabling proxy code generation
+## 6.5 启用代理代码生成
 
-Service proxy generation is done using *javac* and apt annotation processing at compilation time. Two Vert.x modules are required: *vertx-service-proxy* and *vertxcodegen*.
+服务代理生成是在编译时使用 *java* 和 apt 注解处理完成的。 需要两个 Vert.x 模块：*vertx-service-proxy* 和 *vertx-codegen*。
 
-To make the Vert.x code generation work with annotation processing in Gradle, you will need a configuration similar to the following.
+要使 Vert.x 代码生成与 Gradle 中的注解处理一起使用，您将需要类似于以下内容的配置。
 
 ![](Chapter6-BeyondTheEventBus.assets/Listing_6_6.png)
 
-Now whenever the Java classes are being compiled, the proxy classes are generated. You can see the files in the *src/main/generated* folder of your project.
+现在，每当编译 Java 类时，都会生成代理类。 您可以在项目的 *src/main/generated* 文件夹中查看文件。
 
-If you look into the code of *SensorDataServiceVertxProxyHandler*, you’ll see a *switch* block in the *handle* method, where the *action* header is being used to dispatch the method call to the service implementation methods. Similarly, in the *average* method of *SensorDataServiceVertxEBProxy* you will see the code that sends a message over the event bus to invoke that method. The code of both *SensorDataServiceVertxProxyHandler* and *SensorDataServiceVertxEBProxy* is really what you would write if you had to implement your own event-bus service system.
+如果您查看 *SensorDataServiceVertxProxyHandler* 的代码，您会在 *handle* 方法中看到 *switch* 块，其中 `action` 标头用于将方法调用分派给服务实现方法。 同样，在 *SensorDataServiceVertxEBProxy* 的 *average* 方法中，您将看到通过事件总线发送消息以调用该方法的代码。如果您必须实现自己的事件总线服务系统，*SensorDataServiceVertxProxyHandler* 和 *SensorDataServiceVertxEBProxy* 的代码实际上就是您要编写的代码。
 
-## 6.6 Deploying event-bus services
+## 6.6 部署事件总线服务
 
-Event-bus services need to be deployed to verticles, and event-bus addresses need to be defined. The following listing shows how to deploy a service.
+事件总线服务需要部署到 Verticle，并且需要定义事件总线地址。 以下清单显示了如何部署服务。
 
 ![](Chapter6-BeyondTheEventBus.assets/Listing_6_7.png)
 
-Deploying is as simple as binding to an address and passing a service implementation. We can use the factory *create* methods from the *SensorDataService* interface to do this.
+部署就像绑定到地址并传递服务实现一样简单。 我们可以使用 *SensorDataService* 接口中的工厂 *create* 方法来执行此操作。
 
-You can deploy multiple services on a verticle. It makes sense to deploy event-bus services that are functionally related together, so a verticle remains a coherent eventprocessing unit.
+您可以在一个 Verticle 上部署多个服务。 部署功能相关的事件总线服务是有意义的，因此 Verticle 仍然是一个连贯的事件处理单元。
 
-Obtaining a service proxy to issue method calls is done by calling the corresponding factory method and passing the correct event-bus destination, as in the following listing.
+通过调用相应的工厂方法并传递正确的事件总线地址来获得用于发出方法调用的服务代理，如下面的清单所示。
 
 ![](Chapter6-BeyondTheEventBus.assets/Listing_6_8.png)
 
-The service interface follows the callbacks model, as this is the canonical definition for (asynchronous) service interfaces.
+服务接口遵循回调模型，因为这是（异步）服务接口的规范定义。
 
-## 6.7 Service proxies beyond callbacks
+## 6.7 超越回调的服务代理
 
-We explored asynchronous programming models other than callbacks in the previous chapter, but we designed event-bus services with callbacks. The good news is that you can leverage code generation to get, say, RxJava or Kotlin coroutine variants for your service proxies. Even better, you do not need much extra work!
+我们在前一章探讨了回调以外的异步编程模型，但我们设计了带有回调的事件总线服务。 好消息是，您可以利用代码生成来为您的服务代理获取 RxJava 或 Kotlin 协程变体。 更好的是，您不需要太多额外的工作！
 
-To make this work, you need to add the @VertxGen annotation to your service interface, as follows.
+要实现此功能，需要将`@VertxGen`注解添加到服务接口，如下所示。
 
 ![](Chapter6-BeyondTheEventBus.assets/Listing_6_9.png)
 
-When this annotation is present, code generation by a Vert.x Java annotation processor is enabled with all suitable code generators available at build time.
+当此注解存在时，Vert.x Java 注解处理器的代码生成将在构建时启用所有合适的代码生成器。
 
-To generate RxJava bindings, we need to add the dependencies in the following listing.
+要生成 RxJava 绑定，我们需要在以下清单中添加依赖项。
 
 ![](Chapter6-BeyondTheEventBus.assets/Listing_6_10.png)
 
-When we compile the project, a *chapter6.reactivex.SensorDataService* class is generated. This is a small shim that bridges the original callbacks API to RxJava. The class has all the methods from the original *SensorDataService* API (including *create* factory methods), plus rx-prefixed methods.
+当我们编译项目时，会生成一个 *chapter6.reactivex.SensorDataService* 类。 这是一个将原始回调 API 连接到 RxJava 的小垫片。 该类具有原始 *SensorDataService* API 中的所有方法（包括 *create* 工厂方法），以及带有 rx 前缀的方法。
 
-Given the *average* method that takes a callback, the RxJava code generator creates an *rxAverage* method with no parameter that returns a *Single* object. Similarly, *valueFor* gets translated to *rxValueFor*, a method that takes a *String* argument (the sensor identifier) and returns a *Single* object.
+给定接受回调的 *average* 方法，RxJava 代码生成器创建一个不带参数的 *rxAverage* 方法，该方法返回 *Single* 对象。 类似地，*valueFor* 被转换为 *rxValueFor*，这是一个接受 *String* 参数（传感器标识符）并返回 *Single* 对象的方法。
 
-The next listing shows a sample use of the generated RxJava API.
+下一个清单显示了使用生成的 RxJava API 的示例。
 
 ![](Chapter6-BeyondTheEventBus.assets/Listing_6_11.png)
 
-The RxJava pipeline created here makes a new subscription every three seconds and extracts the average into a string that is then displayed on the standard output.
+此处创建的 RxJava 管道每三秒进行一次新订阅，并将平均值提取到一个字符串中，然后显示在标准输出中。
 
->  **🏷注意:** You must always develop your event-bus services with the callbacks API for the interface and implementation. Code generators then turn it into other models.
+>  **🏷注意:** 您必须始终使用接口和实现的回调 API 来开发事件总线服务。 然后代码生成器将其转换为其他模型。
 
-Now that you know how to develop event-bus services, let’s switch to the topic of testing verticles and services.
+现在您知道如何开发事件总线服务，让我们切换到测试 Verticle 和服务的主题。
 
-## 6.8 Testing and Vert.x
+## 6.8 测试和 Vert.x
 
-Automated testing is critical in designing software, and Vert.x applications also need to be tested. The main difficulty when testing Vert.x code is the asynchronous nature of operations. Other than that, tests are classical: they have a setup phase and a test execution and verification phase, followed by a tear-down phase.
+自动化测试在软件设计中至关重要，Vert.x 应用程序也需要进行测试。 测试 Vert.x 代码的主要困难是操作的异步特性。 除此之外，测试是经典的：它们有一个设置阶段和一个测试执行和验证阶段，然后是一个拆卸阶段。
 
-A verticle is relatively well isolated from the rest of the system, thanks to the event bus. This is very useful in a test environment:
-  - The event bus allows you to send events to a verticle to put it in a desired state and to observe what events it produces.
-  - The configuration passed to a verticle when it is deployed allows you to tune some parameters for a test-centric environment (e.g., using an in-memory database).
-  - It is possible to deploy mock verticles with controlled behaviors to substitute for verticles with lots of dependencies (e.g., databases, connecting to other verticles, etc.).
+多亏了事件总线，verticle 与系统的其余部分相对隔离得很好。 这在测试环境中非常有用：
+  - 事件总线允许您将事件发送到一个verticle，以使其处于所需的状态，并观察它产生了什么事件。
+  - 部署时传递给 Verticle 的配置允许您为以测试为中心的环境调整一些参数（例如，使用内存数据库）。
+  - 可以部署具有受控行为的模拟 Verticle 来替代具有大量依赖项的 Verticle（例如，数据库、连接到其他 Verticle 等）。
 
-As such, testing verticles is more integration testing than unit testing, regardless of whether the verticles under test are being deployed within the same JVM or in cluster mode. We need to see verticles as opaque boxes that we communicate with via the event bus, and possibly by connecting to network protocols that verticles expose. For instance, when a verticle exposes an HTTP service, we are likely going to issue HTTP requests in tests to check its behavior.
+因此，与单元测试相比，测试 Verticle 更像是集成测试，无论被测试的 Verticle 是部署在同一个 JVM 中还是以集群模式部署。 我们需要将 Verticle 视为不透明的盒子，我们通过事件总线进行通信，并且可能通过连接到 Verticle 公开的网络协议。 例如，当一个 Verticle 暴露一个 HTTP 服务时，我们可能会在测试中发出 HTTP 请求来检查它的行为。
 
-In this book, we will only focus on the Vert.x-specific aspects of testing. If you lack experience with the broader topic of testing, I recommend reading a book like *Effective Unit Testing* by Lasse Koskela (Manning, 2013).
+在本书中，我们将只关注 Vert.x 特定的测试方面。 如果您对更广泛的测试主题缺乏经验，我建议您阅读 Lasse Koskela（Manning，2013 年）的 *Effective Unit Testing* 之类的书。
 
-### 6.8.1 Using JUnit 5 with Vert.x
+### 6.8.1 将 JUnit 5 与 Vert.x 一起使用
 
-Vert.x supports both the classic JUnit 4 test framework as well as the more recent one for JUnit 5. Vert.x provides a module called *vertx-junit5* with support for version 5 of the JUnit framework (https://junit.org/junit5/). To use it in a Vert.x project, you need to add the *io.vertx:vertx-junit5* dependency, and possibly some JUnit 5 libraries.
+Vert.x 支持经典的 JUnit 4 测试框架以及最新的 JUnit 5 测试框架。Vert.x 提供了一个名为 *vertx-junit5* 的模块，支持 JUnit 框架的第 5 版 (https://junit. org/junit5/）。 要在 Vert.x 项目中使用它，您需要添加 *io.vertx:vertx-junit5* 依赖项，可能还有一些 JUnit 5 库。
 
-In a Gradle project, the *dependencies* section needs to be updated as in the following listing.
+在 Gradle 项目中，需要更新 *dependencies* 部分，如下所示。
 
 ![](Chapter6-BeyondTheEventBus.assets/Listing_6_12.png)
 
-The *vertx-junit5* library already has a dependency on *junit-jupiter-api*, but it is a good practice to fix the version in the build. The *junit-jupiter-engine* module needs to be present in the *testRuntime* scope for Gradle. Finally, JUnit 5 can be used with any assertion API, including its built-in one, and AssertJ is a popular one.
+*vertx-junit5* 库已经依赖于 *junit-jupiter-api*，但在构建中修复版本是一个好习惯。 *junit-jupiter-engine* 模块需要存在于 Gradle 的 *testRuntime* 范围内。 最后，JUnit 5 可以与任何断言 API 一起使用，包括它的内置 API，而 AssertJ 是一种流行的 API。
 
-### 6.8.2 Testing DataVerticle
+### 6.8.2测试 DataVerticle
 
-We need two test cases to check the behavior of *DataVerticle*, and by extension that of *SensorDataService*:
-  - When no sensor is present, the average should be 0, and requesting a value for any sensor identifier must raise an error.
-  - When there are sensors, we need to check the average value and individual sensor values.
+我们需要两个测试用例来检查 *DataVerticle* 的行为，以及 *SensorDataService* 的扩展：
+  - 当不存在传感器时，平均值应为 0，并且请求任何传感器标识符的值都必须引发错误。
+  - 当有传感器时，我们需要检查平均值和单个传感器值。
 
-Figure 6.2 shows the interactions for the test environment. The test case has a proxy reference to make calls to *SensorDataService*. The actual *DataVerticle* verticle is deployed at the *sensor.data-service* destination. It can issue *valueFor* and *average* method calls from tests. Since *DataVerticle* receives messages from sensors on the event bus, we can send arbitrary messages rather than deploying actual *HeatSensor* verticles over which we have no control. Mocking a verticle is often as simple as sending the type of messages it would send.
+**图 6.2** 显示了测试环境的交互。 测试用例有一个代理引用来调用*SensorDataService*。 实际的 *DataVerticle* verticle 部署在 *sensor.data-service* 目的地。 它可以从测试中发出 *valueFor* 和 *average* 方法调用。 由于 *DataVerticle* 从事件总线上的传感器接收消息，我们可以发送任意消息，而不是部署我们无法控制的实际 *HeatSensor* verticles。 模拟一个 Verticle 通常就像发送它要发送的消息类型一样简单。
 
 ![](Chapter6-BeyondTheEventBus.assets/Figure_6_2.png)
 
-The following listing shows the test class preamble.
+以下清单显示了测试类序言。
 
 ![](Chapter6-BeyondTheEventBus.assets/Listing_6_13.png)
 
-JUnit 5 supports extensions to give additional functionality. In particular, extensions can inject parameters into test methods, and they can intercept life-cycle events such as before and after a test method is called. The *VertxExtension* class simplifies writing test cases by doing the following:
-  - Injecting ready-to-use instances of *Vertx* with default configuration
-  - Injecting a *VertxTestContext* object to deal with the asynchronous nature of Vert.x code
-  - Ensuring awaiting for the *VertxTestContext* to either succeed or fail
+JUnit 5 支持扩展以提供附加功能。 特别是，扩展可以将参数注入测试方法，它们可以拦截生命周期事件，例如调用测试方法之前和之后。 *VertxExtension* 类通过执行以下操作来简化编写测试用例：
+  - 使用默认配置注入 *Vertx* 的现成实例
+  - 注入 *VertxTestContext* 对象来处理 Vert.x 代码的异步特性
+  - 确保等待 *VertxTestContext* 成功或失败
 
-The *prepare* method is executed before each test case, to prepare the test environment. We use it here to deploy the *DataVerticle* verticle and then fetch the service proxy and store it in the *dataService* field. Since deploying a verticle is an asynchronous operation, the *prepare* method is injected with a *Vertx* context and a *VertxTestContext* object to notify when it has completed.
+*prepare* 方法在每个测试用例之前执行，以准备测试环境。 我们在这里使用它来部署 *DataVerticle* verticle，然后获取服务代理并将其存储在 *dataService* 字段中。 由于部署 Verticle 是一个异步操作，所以 *prepare* 方法会被注入 *Vertx* 上下文和 *VertxTestContext* 对象以通知它何时完成。
 
->  **💡提示:** Users of JUnit before version 5 may be surprised that the class and test methods are package-private; this is idiomatic with JUnit 5.
+>  **💡提示:** 版本 5 之前的 JUnit 用户可能会惊讶于类和测试方法是包私有的； 这是 JUnit 5 的惯用方法。
 
-You can see the first test case, when no sensors are deployed, in the following listing.
+您可以在以下清单中看到第一个测试用例，当没有部署传感器时。
 
 ![](Chapter6-BeyondTheEventBus.assets/Listing_6_14.png)
 
-This test case assumes that no sensor has been deployed, so trying to get any sensor value must fail. We check this behavior by looking for the temperature value of sensor *abc*, which doesn’t exist. We then check that the average value is 0.
+此测试用例假设没有部署传感器，因此尝试获取任何传感器值肯定会失败。 我们通过查找不存在的传感器 *abc* 的温度值来检查此行为。 然后我们检查平均值是否为 0。
 
-Checkpoints are flagged to mark that the test execution reached certain lines.
+检查点被标记以标记测试执行到达某些行。
 
-When all declared checkpoints have been flagged, the test completes successfully. The test fails when an assertion fails, when an unexpected exception is thrown, or when a (configurable) delay elapses and not all checkpoints have been flagged.
+当所有声明的检查点都被标记之后，测试就成功完成了。当断言失败、抛出意外异常或发生(可配置)延迟且未标记所有检查点时，测试失败。
 
-**Why asynchronous testing is different**
+**为什么异步测试不同**
 
-Testing asynchronous operations is slightly different from the regular testing you may be familiar with. The default contract in test executions is that a test runner thread calls test methods, and they fail when exceptions are thrown. Assertion methods throw exceptions to report errors.
+测试异步操作与您可能熟悉的常规测试略有不同。 测试执行中的默认约定是测试运行线程调用测试方法，并且在抛出异常时它们会失败。 断言方法抛出异常以报告错误。
 
-Since operations like *deployVerticle* and *send* are asynchronous, the test runner thread exits the method before they have any chance to complete. The *VertxExtension* class takes care of that by waiting for *VertxTestContext* to report either a success or a failure. To avoid having tests wait forever, there is a timeout (30 seconds by default).
+因为像 *deployVerticle* 和 *send* 这样的操作是异步的，所以测试运行线程在它们有机会完成之前就退出了方法。 *VertxExtension* 类通过等待 *VertxTestContext* 报告成功或失败来处理这个问题。 为了避免让测试永远等待，有一个超时（默认为 30 秒）。
 
-Finally, we have a test case for when there are sensors.
+最后，当有传感器时，我们有一个测试用例。
 
 ![](Chapter6-BeyondTheEventBus.assets/Listing_6_15.png)
 
-This test simulates two sensors with identifiers *abc* and *def* by sending fake sensor data updates over the event bus, just like a sensor would do. We then have determinism in our assertions, and we can check the behavior for both *valueFor* and *average* methods.
+该测试通过在事件总线上发送虚假传感器数据更新来模拟具有标识符 *abc* 和 *def* 的两个传感器，就像传感器所做的那样。 然后，我们的断言具有确定性，我们可以检查 *valueFor* 和 *average* 方法的行为。
 
-### 6.8.3 Running the tests
+### 6.8.3 运行测试
 
-The tests can be run from your IDE. You can also run them using Gradle: *gradlew test*.
+可以从您的 IDE 运行测试。 您也可以使用 Gradle 运行它们：*gradlew test*。
 
-Gradle generates a human-readable test report in *build/reports/tests/test/ index.html*. When you open the file in a web browser, you can check that all tests passed, as shown in figure 6.3.
+Gradle 在 *build/reports/tests/test/index.html* 中生成人类可读的测试报告。 当您在网络浏览器中打开该文件时，您可以检查所有测试是否通过，如**图 6.3** 所示。
 
 ![](Chapter6-BeyondTheEventBus.assets/Figure_6_3.png)
 
-Note that the Gradle *test* task is a dependency of *build*, so the tests are always executed when the project is fully built.
+请注意，Gradle *test* 任务是 *build* 的依赖项，因此测试总是在项目完全构建时执行。
 
 ## 总结
 
-  - Event-bus services and proxies abstract from event-bus communications by providing an asynchronous service interface.
-  - It is possible to generate bindings other than callbacks for event-bus services: RxJava, Kotlin coroutines, etc.
-  - Testing asynchronous code and services is more challenging than in the traditional imperative cases, and Vert.x comes with dedicated support for JUnit 5.
+  - 事件总线服务和代理通过提供异步服务接口从事件总线通信中抽象出来。
+  - 可以为事件总线服务生成除回调之外的绑定：RxJava、Kotlin 协程等。
+  - 测试异步代码和服务比传统的命令式案例更具挑战性，Vert.x 提供了对 JUnit 5 的专门支持。
 
