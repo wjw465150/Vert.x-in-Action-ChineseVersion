@@ -11,7 +11,7 @@
 
 ## 6.1   使用服务 API 重新审视热传感器
 
-在第 3 章中，我们以热传感器为例。 我们有一个 *SensorData* verticle，它保存每个传感器的最后观察值，并使用事件总线上的请求/应答通信计算它们的平均值。 下面的清单显示了我们用来计算温度平均值的代码。
+在第 3 章中，我们以热传感器为例。 我们有一个 *SensorData* verticle，它保存每个传感器的最后观察值，并使用事件总线上的**请求/应答**通信计算它们的平均值。 下面的清单显示了我们用来计算温度平均值的代码。
 
 ![](Chapter6-BeyondTheEventBus.assets/Listing_6_1.png)
 
@@ -21,24 +21,24 @@
 
 ![](Chapter6-BeyondTheEventBus.assets/Listing_6_2.png)
 
-提议的接口具有带有尾随回调参数的方法，因此调用者将被异步通知响应和错误。 *`Handler<AsyncResult<T>>`* 类型通常用于 Vert.x API 中的回调，其中 T 可以是任何东西，但通常是 JSON 类型。
+提议的接口具有带有尾随回调参数的方法，因此调用者将被异步通知响应和错误。 *`Handler<AsyncResult<T>>`* 类型通常用于 Vert.x API 中的回调，其中 `T` 可以是任何东西，但通常是 JSON 类型。
 
 **清单 6.2** 的接口是我们使用事件总线服务的目标。 让我们修改热传感器示例，将事件总线交互替换为 *SensorDataService* 类型的 Java 接口。
 
 ## 6.2 返回 RPC（远程过程调用）
 
-您可能已经熟悉 *远程过程调用*，这是分布式计算中的一种流行抽象。 当您调用在另一台机器（服务器）上运行的函数时，引入了 RPC 来隐藏网络通信。 这个想法是本地函数充当代理，通过网络向服务器发送带有调用参数的消息，然后服务器调用 *real* 函数。 然后将响应发送回代理，客户端会产生调用常规本地函数的错觉。
+您可能已经熟悉 **远程过程调用**，这是分布式计算中的一种流行抽象。 当您调用在另一台机器（服务器）上运行的函数时，引入了 RPC 来隐藏网络通信。 这个想法是本地函数充当代理，通过网络向服务器发送带有调用参数的消息，然后服务器调用 **真实** 函数。 然后将响应发送回代理，客户端会产生调用常规本地函数的错觉。
 
 Vert.x 事件总线服务是一种*异步 RPC*：
   - 服务封装了一组操作，如**清单 6.2** 中的 *SensorDataService*。
   - 服务由带有公开操作方法的常规 Java API 描述。
   - 请求者和实现者都不需要直接处理事件总线消息。
 
-图 6.1 说明了在调用 *SensorDataService* 接口的 *average* 方法时所涉及的各种组件。 客户端代码调用服务代理上的 *average* 方法。 这是一个实现 *SensorDataService* 接口的对象，然后在事件总线上将消息发送到 *sensor.data-service* 目的地（可以配置）。 消息体包含方法调用参数值，所以因为*average*只接受回调，所以消息体为空。 该消息还有一个 *action* 标头，指示正在调用哪个方法。
+图 6.1 说明了在调用 *SensorDataService* 接口的 *average* 方法时所涉及的各种组件。 客户端代码调用服务代理上的 *average* 方法。 这是一个实现 *SensorDataService* 接口的对象，然后在事件总线上将消息发送到 *sensor.data-service* 目的地（可以配置）。 消息体包含方法调用参数值，所以因为*average*只接受回调，所以消息体为空。 该消息还有一个 **action** 标头，指示正在调用哪个方法。
 
 ![](Chapter6-BeyondTheEventBus.assets/Figure_6_1.png)
 
-代理处理程序侦听 *sensor.data-service* 目标并根据消息的操作标头和正文分派方法调用。 这里使用了实际的 *SensorDataService* 实现，并调用了 *average* 方法。 然后，代理处理程序使用通过 *average* 方法回调传递的值回复事件总线消息。 反过来，客户端通过服务代理接收回复，服务代理将回复传递给来自客户端调用的回调。
+**代理处理程序(proxy handler)**侦听 *sensor.data-service* 目标并根据消息的操作标头和正文分派方法调用。 这里使用了实际的 *SensorDataService* 实现，并调用了 *average* 方法。 然后，**代理处理程序(proxy handler)**使用通过 *average* 方法回调传递的值回复事件总线消息。 反过来，客户端通过**服务代理(service proxy  )**接收回复，**服务代理(service proxy)**将回复传递给来自客户端调用的回调。
 
 这种模型可以简化对事件总线的处理，尤其是在需要公开许多操作时。 因此，将 Java 接口定义为 API 而不是手动处理消息是有意义的。
 
@@ -46,7 +46,7 @@ Vert.x 事件总线服务是一种*异步 RPC*：
 
 清单 6.2 有我们想要的 *SensorDataService* 接口，但还需要添加一些代码。 要开发事件总线服务，您需要
   - 编写一个尊重一些约定的 Java 接口
-  - 编写一个实现
+  - 编写一个实现类
 
 Vert.x 不依赖于通过字节码工程或运行时反射的魔法，因此需要编写和编译*服务代理* 和 *处理程序*。 幸运的是，Vert.x 带有代码生成器，因此您将在编译时生成服务代理和处理程序，而不是自己编写它们。
 
@@ -72,19 +72,19 @@ Vert.x 不依赖于通过字节码工程或运行时反射的魔法，因此需�
 
 ![](Chapter6-BeyondTheEventBus.assets/Listing_6_5.png)
 
-与第 3 章的代码相比，我们大部分都将事件总线代码替换为通过已完成的future 对象传递异步结果。 此代码也没有对生成的*服务代理处理程序*代码的引用。
+与第 3 章的代码相比，我们大部分都将事件总线代码替换为通过已完成的future对象传递异步结果。 此代码也没有对生成的**服务代理处理程序(proxy handler)**代码的引用。
 
 >  **💡提示:** 清单 6.5 中的代码没有异步操作。 在更详细的服务中，您会很快发现向其他组件（如数据库、HTTP 服务、消息代理，甚至是事件总线上的其他服务）发出异步调用的情况。 准备好响应后，您会将结果或错误传递给回调方法，就像我们在 *SensorDataServiceImpl* 中所做的那样。
 
 ## 6.5 启用代理代码生成
 
-服务代理生成是在编译时使用 *java* 和 apt 注解处理完成的。 需要两个 Vert.x 模块：*vertx-service-proxy* 和 *vertx-codegen*。
+服务代理生成是在编译时使用 *java* 和 *apt* 注解处理完成的。 需要两个 Vert.x 模块：*vertx-service-proxy* 和 *vertx-codegen*。
 
 要使 Vert.x 代码生成与 Gradle 中的注解处理一起使用，您将需要类似于以下内容的配置。
 
 ![](Chapter6-BeyondTheEventBus.assets/Listing_6_6.png)
 
-现在，每当编译 Java 类时，都会生成代理类。 您可以在项目的 *src/main/generated* 文件夹中查看文件。
+现在，每当编译 Java 类时，都会生成代理类。 您可以在项目的 `src/main/generated` 文件夹中查看文件。
 
 如果您查看 *SensorDataServiceVertxProxyHandler* 的代码，您会在 *handle* 方法中看到 *switch* 块，其中 `action` 标头用于将方法调用分派给服务实现方法。 同样，在 *SensorDataServiceVertxEBProxy* 的 *average* 方法中，您将看到通过事件总线发送消息以调用该方法的代码。如果您必须实现自己的事件总线服务系统，*SensorDataServiceVertxProxyHandler* 和 *SensorDataServiceVertxEBProxy* 的代码实际上就是您要编写的代码。
 
@@ -93,6 +93,8 @@ Vert.x 不依赖于通过字节码工程或运行时反射的魔法，因此需�
 事件总线服务需要部署到 Verticle，并且需要定义事件总线地址。 以下清单显示了如何部署服务。
 
 ![](Chapter6-BeyondTheEventBus.assets/Listing_6_7.png)
+
+> 译者注:  `register()`方法里创建**服务代理处理程序(proxy handler)**对象并对**服务代理(service proxy)**发送的事件进行事件消费
 
 部署就像绑定到地址并传递服务实现一样简单。 我们可以使用 *SensorDataService* 接口中的工厂 *create* 方法来执行此操作。
 
