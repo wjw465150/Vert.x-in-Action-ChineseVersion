@@ -1,353 +1,313 @@
-# 第七章: Designing a reactive application
+# 第七章: 设计一个反应式应用程序
 
-**This chapter covers**
-  - What a reactive application is
-  - Introducing the reactive application scenario used throughout part 2
+**本章涵盖**
 
-The first part of this book taught you asynchronous programming with Vert.x. This is key to writing scalable and resource-efficient applications.
+  - 什么是反应式应用
+  - 介绍整个第2部分中使用的反应式应用程序方案
 
-It is now time to explore what makes an application *reactive*, as we strive for both scalability and dependability. To do that, we will focus the following chapters on developing a fully reactive application out of several event-driven microservices. In this chapter, we’ll specify these services.
+本书的第一部分教您使用Vert.x的异步编程。 这是编写可扩展和资源有效应用程序的关键。
 
-## 7.1 What makes an application reactive
+现在是时候探索使应用程序 **反应式(reactive)**的原因了，因为我们努力提高可伸缩性和可靠性。 为此，我们将集中精力于从几个事件驱动的微服务中开发完全反应式应用程序。 在本章中，我们将指定这些服务。
 
-In previous chapters we covered some elements of reactive:
+## 7.1 是什么使应用程序具有反应性
 
-◾     Back-pressure, as a necessary ingredient in asynchronous stream processing to regulate event throughput
+在前几章中，我们介绍了反应式的一些元素：
+  - 背压，作为异步流处理中的必要成分，以调节事件吞吐量
+  - 反应式编程是组成异步操作的一种方式
 
-◾     Reactive programming as a way to compose asynchronous operations
+现在是时候探索最后一个方面了： **反应式应用程序**。 在第1章中，我总结了 *反应式宣言*，该声明反应式应用是: **响应式的**，**有复原力的**，**有弹性的**和**消息驱动的**。
 
-It is now time to explore the last facet: *reactive applications*. In chapter 1 I summarized *The Reactive Manifesto*, which declares that reactive applications are responsive, resilient, elastic, and message-driven.
+反应式应用程序的关键属性是，在苛刻的工作量和面对其他服务失败时，它们是响应良好的。 通过“响应迅速”，我们的意思是，服务响应的延迟仍处于控制之下。 一个很好的响应示例将是一项在99％百分位数中在500毫秒内做出响应的服务，但鉴于该服务的功能要求和操作约束，500毫秒是一个很好的数字。
 
-The key property of reactive applications is that they remain responsive under demanding workloads and when they face the failure of other services. By “responsive,” we mean that latency for service response remains under control. A good responsiveness example would be a service that responds within 500 ms in the 99% percentile, provided that 500 ms is a good number given the service’s functional requirements and operational constraints.
+不断增加的工作负载几乎总是会降低延迟，但对于响应式应用程序，目标是避免服务在压力下出现延迟爆发。本书的第1部分主要介绍了使用Vert.x进行异步编程，这是应对日益增长的工作负载的关键因素。您看到，异步事件处理允许在单个线程上多路复用数千个开放的网络连接。这个模型(如果实现正确的话!)比传统的“每个连接1个线程”模型在资源友好和可伸缩性方面都要好得多。
 
-An increasing workload will almost always degrade latency, but in the case of a reactive application, the goal is to avoid latency explosion when the service is under stress. Part 1 of this book mostly taught you asynchronous programming with Vert.x, which is the key ingredient for facing growing workloads. You saw that asynchronous processing of events allowed you to multiplex thousands of open network connections on a single thread. This model (when implemented correctly!) is much more resource-friendly and scalable than the traditional “1 thread per connection” model.
+因此，Vert.x为我们提供了一个在JVM之上进行异步编程的基础，以满足高要求的工作负载，但是如何处理故障呢?这是我们必须面对的另一个核心挑战，而答案并不是我们可以从货架上取下的神奇工具。假设我们有一个与数据库通信的服务，由于内部问题(如死锁)而失去响应。在我们的服务收到错误通知(可能以TCP连接超时的形式)之前会经过一段时间。在这种情况下，延迟爆发。相反，如果数据库关闭，我们会立即得到一个TCP连接错误:延迟非常好，但由于服务不能与它的数据库通信，它无法处理请求。
 
-So Vert.x gives us a foundation for asynchronous programming on top of the JVM in order to meet demanding workloads, but what about dealing with failure? This is the other core challenge that we have to meet, and the answer is not a magic tool we can pick off the shelf. Suppose we have a service that talks to a database that becomes irresponsive because of an internal problem, like a deadlock. Some time will elapse before our service is notified of an error, perhaps in the form of a TCP connection timeout. In such a case, the latency explodes. By contrast, if the database is down, we get an immediate TCP connection error: latency is very good, but since the service cannot talk to its database, it is unable to process a request.
+在本部分的最后一章中，您将看到如何试验“出错时的情况”，我们还将讨论保持服务响应性的可能解决方案。你可能会对所有对其他服务(包括数据库)的调用强制执行严格的超时，或者在任何地方都使用**断路器**(在最后一章中有更多的介绍)，但一个更分析的方法将帮助你看到使用哪种解决方案，如果有的话，以及何时使用。根据服务的功能需求和应用程序域来查看失败也很重要:对失败的响应可能并不总是错误。例如，如果我们不能从传感器获得最新的温度更新，我们可以提供最后一个已知值，并将时间戳附加到它，这样请求程序就可以将所有必要的上下文附加到数据。
 
-You will see in the last chapter of this part how to experiment with “what happens when things go wrong,” and we’ll discuss possible solutions for keeping services responsive. You might be tempted to enforce strict timeouts on all calls to other services (including databases), or to use *circuit-breakers* (more on that in the last chapter) everywhere, but a more analytical approach will help you see which solution to use, if any, and when. It is also important to see failure in the light of a service’s functional requirements and application domain: the response to failure may not always be an error. For instance, if we can’t get the latest temperature update from a sensor, we may serve the last known value and attach a timestamp to it, so the requester has all the necessary context attached to the data.
+现在是构建响应式应用程序的时候了，既可以探索Vert.x堆栈的一些元素，也可以了解如何具体地构建响应式应用程序。
 
-It is now time to build a reactive application, both to explore some elements of the Vert.x stack and to learn how to concretely build responsive applications.
+## 7.2 10K步骤挑战场景
 
-## 7.2 The 10k steps challenge scenario
-
-The application that we will implement in the upcoming chapters supports a (not so) fictional fitness-tracker challenge. Suppose we want to build an application to track and score users’ steps, as illustrated in figure 7.1.
+我们将在接下来的章节中实现的应用程序支持一个(不那么)虚构的健身追踪器挑战。假设我们想要构建一个应用程序来跟踪和记录用户的步骤，如**图7.1**所示。
 
 ![](Chapter7-DesigningAReactiveApplication.assets/Figure_7_1.png)
 
-The application described in figure 7.1 would work as follows:
+**图7.1**中描述的应用程序如下：
 
-◾     Users sport connected pedometers that track how many steps they take.
+  - 用户使用联网计步器来跟踪他们走了多少步。
+  - 计步器会定期向管理挑战的应用程序发送步数更新。
+  - 目标是每天至少走1万步，当用户这样做时，每天都会收到一封电子邮件。
+  - 用户可以选择在过去24小时内的步数排名中公开列出。
+  - 参与者还可以连接到一个网络应用程序，查看自己的数据，并更新自己的信息，比如他们所在的城市，以及他们是否希望出现在公共排名中。
 
-◾     The pedometers regularly send step-count updates to the application that manages the challenge.
-
-◾     The goal is to walk at least 10,000 steps each day, and users are greeted by an email every day when they do so.
-
-◾     Users may choose to be publicly listed in rankings of step counts over the last 24 hours.
-
-◾     Participants can also connect to a web application to see their data and update their information, such as their city and whether they want to appear in public rankings.
-
-The web application allows new users to register by providing their device identifier as well as some basic information, such as their city and whether they intend to appear in public rankings (figure 7.2).
+这个web应用程序允许新用户通过提供他们的设备标识符和一些基本信息来注册，比如他们的城市以及他们是否打算出现在公共排名中(**图7.2**)。
 
 ![](Chapter7-DesigningAReactiveApplication.assets/Figure_7_2.png)
 
-Once connected, a user can update some basic details and get reminded of their total steps, monthly steps, and daily steps (figure 7.3).
+一旦连接上，用户就可以更新一些基本的细节，并获得总步数、月步数和每日步数的提醒(**图7.3**)。
 
 ![](Chapter7-DesigningAReactiveApplication.assets/Figure_7_3.png)
 
 ![](Chapter7-DesigningAReactiveApplication.assets/Figure_7_4.png)
 
-There is also a separate web application that offers a public dashboard (figure 7.4).
+还有一个单独的web应用程序提供了一个公共仪表板(**图7.4**)。
 
-The dashboard offers a ranking of public profiles over the last 24 hours, the current pedometer device update throughput, and trends by city. All the information displayed in the dashboard is updated live.
+仪表板提供了过去24小时内的公共档案排名，当前计步器设备的更新吞吐量，以及城市趋势。仪表板中显示的所有信息都实时更新。
 
-## 7.3 One application, many services
+## 7.3 一个应用程序，许多服务
 
-The application is decomposed as a set of (micro) services that interact with each other as in figure 7.5. Each service fulfills a single functional purpose and could well be used by another application. There are four public services: two user-facing web applications, one service for receiving pedometer device updates, and one service to expose a public HTTP API. The public API is used by the user web application, and we could similarly have mobile applications connect to it. There are four internal services: one to manage user profiles, one to manage activity data, one to congratulate users over email, and one to compute various stats over continuous events.
+应用程序被分解为一组相互交互的(微)服务，如**图7.5**所示。每个服务都实现单一的功能目的，并且可以被其他应用程序很好地使用。有四个公共服务:两个面向用户的web应用程序，一个用于接收计步器设备更新的服务，以及一个用于公开公共HTTP API的服务。用户web应用程序使用公共API，我们同样可以让移动应用程序连接到它。有四个内部服务:一个管理用户配置文件，一个管理活动数据，一个通过电子邮件祝贺用户，一个计算连续事件的各种统计数据。
 
 ![](Chapter7-DesigningAReactiveApplication.assets/Figure_7_5.png)
 
-> **NOTE** You may have heard of *command query responsibility segregation* (CQRS) and *event-sourcing*, which are patterns found in event-driven architectures.1 CQRS structures how to read and write information, while event sourcing is about materializing the application state as a sequence of facts. Our proposed application architecture relates to both notions, but because it’s not strictly faithful to the definitions, I prefer to just call it an “event-driven microservices architecture.”
+> **🏷注意:** 您可能已经听说过 *命令查询责任隔离 *（CQRS）和 *事件源 *，这是在事件驱动的架构中发现的模式。 CQRS结构如何读取和写入信息，而事件来源是关于将应用程序状态物化为事实序列的。 我们提出的应用程序体系结构与这两个概念都有关，但由于它不严格地符合定义，所以我更喜欢称它为“事件驱动的微服务体系结构”。
 
-All services are powered by Vert.x, and we also need some third-party middleware, labelled “infrastructure services” in figure 7.5. We’ll use two different types of databases: a document-oriented database (MongoDB) and a relational database (PostgreSQL). We need an SMTP server to send emails, and Apache Kafka is used for event-stream processing between some services. Because the ingestion service may receive updates from HTTP and AMQP, we’ll also use an ActiveMQ Artemis server.
+所有服务均由Vert.x提供动力，我们还需要一些第三方中间件，标记为**图7.5**中的“infrastructure services(基础架构服务)”。 我们将使用两种不同类型的数据库：面向文档的数据库（MongoDB）和一个关系型数据库（PostgreSQL）。 我们需要SMTP服务器来发送电子邮件，Apache Kafka用于某些服务之间的事件流处理。 由于*ingestion service(摄取服务)*可能会从HTTP和AMQP接收更新，因此我们还将使用ActiveMQ Artemis服务器。
 
-There are two types of arrows in figure 7.5. Event flows show important event exchanges between services. For instance, the ingestion service sends events to Kafka, whereas the event stats service both consumes and produces Kafka events. I also denoted dependencies: for example, the public API service depends on the user profile and activities services, which in turn depend on their own databases for data persistence.
+**图7.5**中有两种类型的箭头。 事件流显示服务之间重要的事件交流。 例如，摄取服务将事件发送给Kafka，而事件统计服务既消耗并生产Kafka事件。 我还表示依赖性：例如，公共API服务取决于用户配置文件和活动服务，这又取决于他们自己的数据库以进行数据持久性。
 
-We can illustrate one example of interactions between services by looking at how a device update impacts the dashboard web application’s city trends ranking, as in figure 7.6.
+如**图7.6**所示，我们可以通过查看设备更新如何影响仪表板Web应用程序的城市趋势排名来说明服务之间的交互示例。
 
 ![](Chapter7-DesigningAReactiveApplication.assets/Figure_7_6.png)
 
-It all starts with a pedometer sending an update to the ingestion service, which verifies that the update contains all required data. The ingestion service then sends the update to a Kafka topic, and the pedometer device is acknowledged so it knows that the update has been received and will be processed. The update will be handled by multiple consumers listening on that particular Kafka topic, and among them is the activity service. This service will record the data to the PostgreSQL database and then publish another record to a Kafka topic with the number of steps recorded by the pedometer on that day. This record is picked up by the event stats service, which observes updates over windows of five seconds, splits them by city, and aggregates the number of steps. It then posts an update with the increment in steps observed for a given city as another Kafka record. This record is then consumed by the dashboard web application, which finally sends an update to all connected web browsers, which in turn update the display.
+首先，计步器向摄取服务发送更新，摄取服务验证更新是否包含所有需要的数据。然后，摄取服务将更新发送到Kafka主题，计步器设备被确认，因此它知道已经收到更新并将被处理。这个更新将由多个侦听特定Kafka主题的消费者来处理，其中包括活动服务。这个服务将记录数据到PostgreSQL数据库，然后发布另一条记录到Kafka主题的计步器记录的步数在那天。该记录由事件统计服务获取，该服务观察窗口上5秒内的更新，按城市划分更新，并汇总步骤数。然后，它发布一个更新，将一个给定城市观察到的步骤的增量作为另一个Kafka记录。这个记录随后被仪表板web应用程序使用，它最终向所有连接的web浏览器发送一个更新，从而更新显示。
 
-**About the application architecture**
+**关于应用程序架构**
 
-As you dig through the specifications and implementations of the services, you may find the decomposition a bit artificial at times. For instance, the user profile and activity services could well be just one, saving some requests to join data from the two services. Remember that the decomposition was made for pedagogical reasons, and to show relevant elements from the Vert.x stack.
+在深入研究服务的规范和实现时，您可能会发现这种分解有时有点人为。例如，用户配置文件和活动服务可能只有一个，保存一些连接来自两个服务的数据的请求。请记住，进行分解是出于教学目的，并显示Vert.x堆栈中的相关元素。
 
-Making an application from (micro) services requires some compromises, especially as some services may be pre-existing, and you have to deal with them as they are, or you have limited ability to evolve them.
+从(微)服务创建应用程序需要一些妥协，特别是一些服务可能已经存在，您必须按原样处理它们，或者您发展它们的能力有限。
 
-You may also find that the proposed architecture is not a nicely layered one, with some services nicely decoupled and some others having stronger dependencies on others. Again, this is done intentionally for pedagogical purposes. More often than not, real-world applications have to make compromises to deliver working software rather than pursue the quest for architectural perfection.
+您可能还会发现，提议的体系结构并不是一个很好的分层体系结构，一些服务很好地解耦了，而其他一些服务对其他服务有更强的依赖性。同样，这样做是为了教学目的。通常情况下，现实世界的应用程序必须做出妥协来交付工作软件，而不是追求架构的完美。
 
-## 7.4 Service specifications
+## 7.4 服务说明
 
-Let’s discuss the functional and technical specifications of the application services. For each service, we’ll consider the following elements:
+让我们讨论应用程序服务的功能和技术规范。对于每个服务，我们将考虑以下元素:
+  - 功能概述
+  - API描述，如果有的话
+  - 技术上的兴趣点，包括崩溃恢复
+  - 扩展和部署注意事项
 
-◾     Functional overview
+### 7.4.1 用户配置文件服务(User profile service  )
 
-◾     API description, if any
+用户配置文件服务管理唯一用户的配置文件数据。 用户通过以下信息确定：
+  - 用户名（必须是唯一的）
+  - 一个密码
+  - 一个电子邮件地址
+  - 一个城市
+  - 计步器设备标识符(必须是唯一的)
+  - 用户是否希望出现在公共排名中
 
-◾     Technical points of interest, including crash recovery
-
-◾     Scaling and deployment considerations
-
-### 7.4.1 User profile service
-
-The user profile service manages the profile data for a unique user. A user is identified by the following information:
-
-◾     A username (must be unique)
-
-◾     A password
-
-◾     An email address
-
-◾     A city
-
-◾     A pedometer device identifier (must be unique)
-
-◾     Whether the user wants to appear in public rankings or not
-
-The service exposes an HTTP API and persists data in a MongoDB database (see figure 7.7).
+该服务公开一个HTTP API并持久化MongoDB数据库中的数据(参见**图7.7**)。
 
 ![](Chapter7-DesigningAReactiveApplication.assets/Figure_7_7.png)
 
-The service falls into the category of CRUD (for *create*, *read*, *update*, and *delete*) services that sit on top of a database. Table 7.1 identifies the different elements of the HTTP API.
+该服务属于**CRUD**(用于*创建*、*读取*、*更新*和*删除*)服务的类别，它们位于数据库之上。**表7.1**标识了HTTP API的不同元素。
 
-This service is not to be publicly exposed; it is meant to be consumed by other services. There is no authentication mechanism in place. 
+这项服务不应公开暴露； 它应该被其他服务消费。 没有身份验证机制。
 
-**Table 7.1 User profile HTTP API**
+**表7.1用户配置文件HTTP API**
 
-| **Purpose**                               | **Path**         | **Method** | **Data**                   | **Response**                                  | **Status code**                                              |
-| ----------------------------------------- | ---------------- | ---------- | -------------------------- | --------------------------------------------- | ------------------------------------------------------------ |
-| Register a new user                       | /register        | POST       | Registration JSON document | N/A                                           | 200 on success, 409 when the  username or device  identifier already exists, 500 for technical  errors |
-| Get a user’s details                      | /<username>      | GET        | N/A                        | User data in JSON                             | 200 on success, 404 if the  username does not exist,  500 for technical errors |
-| Update some user details                  | /<username>      | PUT        | User data in JSON          | N/A                                           | 200 on success, 500 for technical errors                     |
-| Credentials validation                    | /authenticate    | POST       | Credentials in JSON        | N/A                                           | 200 on success, 401 when authentication fails                |
-| Reverse lookup of a  user by their device | /owns/<deviceId> | GET        | N/A                        | JSON data with the username owning the device | 200 on success, 404 if the device  does not exist, 500  for technical errors |
+| **目的**             | **路径**           | **方法** | **数据**            | **响应**                   | 状态码                                                    |
+| -------------------- | ------------------ | -------- | ------------------- | -------------------------- | --------------------------------------------------------- |
+| 注册新用户           | `/register`        | POST     | 注册JSON文档        | N/A                        | 成功时200，用户名或设备标识符已经存在时409，技术错误时500 |
+| 获取用户的详细信息   | `/<username>`      | GET      | N/A                 | JSON格式的用户数据         | 200表示成功，404表示用户名不存在，500表示技术错误         |
+| 更新一些用户详细信息 | `/<username>`      | PUT      | JSON格式的用户数据  | N/A                        | 成功200，技术错误500                                      |
+| 凭证验证             | `/authenticate`    | POST     | Credentials in JSON | N/A                        | 成功时200，认证失败时401                                  |
+| 用户设备的反向查找   | `/owns/<deviceId>` | GET      | N/A                 | 拥有设备的用户名的JSON数据 | 200表示成功，404表示设备不存在，500表示技术错误           |
 
-The service is here to provide a facade for operations on top of the database. Both the service and the database can be scaled independently.
+这里的服务为数据库上的操作提供了一个门面。服务和数据库都可以独立扩展。
 
-> **NOTE** The API described in table 7.1 does not follow the architectural principles of *representational state transfer* (REST) interfaces. A *RESTful* interface would expose user resources as, say, /user/<username>, and instead of registering new users through a POST request at /register, we would do so on the /user resource. Both faithful REST structures and more liberal HTTP API structures are valid choices.
+> **🏷注意:** **表7.1**中描述的API不遵循*具象状态传输* (REST)接口的架构原则。一个*RESTful*接口将暴露用户资源，例如，`/user/<username>`，而不是通过在`/register`上的POST请求注册新用户，我们将在`/user`资源上这样做。忠实的REST结构和更自由的HTTP API结构都是有效的选择。
 
-### 7.4.2 Ingestion service
+### 7.4.2 摄取服务(Ingestion service  )
 
-The ingestion service collects pedometer device updates and forwards records with update data to a Kafka stream for other services to process the events. The service receives device updates from either an HTTP API or an AMQP queue, as illustrated in figure 7.8. The service is a form of *protocol adapter* or *mediator*, as it converts events from one protocol (HTTP or AMQP) to another protocol (Kafka record streams).
+摄取服务收集计步器设备更新，并将更新数据的记录转发到Kafka流，供其他服务处理事件。服务接收来自HTTP API或AMQP队列的设备更新，如**图7.8**所示。该服务是协议适配器或中介者的一种形式，因为它将事件从一个协议(HTTP或AMQP)转换到另一个协议(Kafka记录流)。
 
-A device update is a JSON document with the following entries:
-
-◾     The device identifier
-
-◾     A synchronization identifier, which is a monotonically increasing long integer that the device updates for each successful synchronization
-
-◾     The number of steps since the last synchronization
+设备更新是一个JSON文档，包含以下条目:
+  - 设备标识符
+  - 一个同步标识符，它是一个单调递增的长整数，每次成功同步设备都会更新它
+  - 自上次同步以来的步数
 
 ![](Chapter7-DesigningAReactiveApplication.assets/Figure_7_8.png)
 
-The HTTP API supports a single operation, as shown in table 7.2.
+HTTP API支持单个操作，如**表7.2**所示。
 
-**Table 7.2 Ingestion service HTTP API**
+**表7.2服务摄取HTTP API**
 
-| **Purpose**               | **Path** | **Method** | **Data**      | **Response** | **Status code**                           |
-| ------------------------- | -------- | ---------- | ------------- | ------------ | ----------------------------------------- |
-| Ingest a pedometer update | /ingest  | POST       | JSON document | N/A          | 200 on success, 500 for technical  errors |
+| **目的**       | **路径**  | **方法** | **数据** | **响应** | 状态码**             |
+| -------------- | --------- | -------- | -------- | -------- | -------------------- |
+| 摄取计步器更新 | `/ingest` | POST     | JSON文档 | N/A      | 成功200，技术错误500 |
 
-The AMQP client receives messages from the step-events address. The JSON data is the same in both the HTTP API and AMQP client.
+AMQP客户端接收来自*step-events*地址的消息。JSON数据在HTTP API和AMQP客户端中是相同的。
 
-The service is meant to be publicly exposed so that it can receive pedometer updates. We assume that some reverse proxy will be used, offering encryption and access control. For instance, device updates over HTTPS could make use of client certificate checks to filter out unauthorized or unpatched devices.
+这项服务是公开的，这样它就可以接收计步器的更新。我们假设将使用一些反向代理，提供加密和访问控制。例如，通过HTTPS进行的设备更新可以利用客户端证书检查来过滤出未经授权或未打补丁的设备。
 
-AMQP and HTTP clients only get acknowledgements when records have been written to Kafka. In the case of HTTP, this means that a device cannot consider the synchronization to be successful until it has received an HTTP 200 response. The service does not check for duplicates, so it is safe for a device to consider the ingestion operation idempotent. As you will see, it is the role of the activity service to keep data consistent, and not that of the ingestion service.
+AMQP和HTTP客户端只有在记录写入Kafka时才会得到确认。在使用HTTP的情况下，这意味着设备在收到HTTP 200响应之前不能认为同步成功。该服务不检查副本，因此设备将摄取操作视为幂等操作是安全的。正如您将看到的，保持数据一致性的是**活动服务**的角色，而不是**摄取服务**的角色。
 
-The service can be scaled independently of the AMQP and the Kafka servers/ clusters. If the service crashes before some form of acknowledgement has been made, a client can always safely retry because of idempotency.
+该服务可以独立于AMQP和Kafka服务器/集群进行扩展。如果服务在做出某种形式的确认之前崩溃，客户机总是可以安全重试，因为它是幂等的。
 
-### 7.4.3 Activity service
+### 7.4.3 活动服务(Activity service  )
 
-The activity service keeps track of step-activity updates sent by the pedometers. The service stores events to a PostgreSQL database and offers an HTTP API to gather some statistics, such as daily, monthly, and total step counts for a given device. Updates are received from a Kakfa topic, which is fed by the ingestion service (see figure 7.9).
+活动服务跟踪计步器发送的步数更新。该服务将事件存储到PostgreSQL数据库，并提供一个HTTP API来收集一些统计信息，例如给定设备的每日、每月和总步数。从Kakfa主题接收更新，该主题由**摄取服务**提供(见**图7.9**)。
 
-The activity service also publishes events with the number of steps for a device on the current day. This way, other services can subscribe to the corresponding Kafka topic and be notified rather than having to regularly poll the activity service for updates.
+**活动服务**还发布带有设备当天步数的事件。通过这种方式，其他服务可以订阅相应的Kafka主题并得到通知，而不必定期轮询活动服务的更新。
 
 ![](Chapter7-DesigningAReactiveApplication.assets/Figure_7_9.png)
 
-The HTTP API is shown in table 7.3.
+HTTP API如表7.3所示。
 
-**Table 7.3 Activity service HTTP API**
+**表7.3活动服务HTTP API**
 
-| **Purpose**                                                  | **Path**                          | **Method** | **Data** | **Response**   | **Status code**                                              |
-| ------------------------------------------------------------ | --------------------------------- | ---------- | -------- | -------------- | ------------------------------------------------------------ |
-| Total step count  for a device                               | /<device id>/total                | GET        | N/A      | JSON  document | 200 on success, 404 if the device does  not exist, 500 for technical errors |
-| Step count for a device in a particular month                | /<device id>/<year>/<month>       | GET        | N/A      | JSON  document | 200 on success, 404 if the device does  not exist, 500 for technical errors |
-| Step count for a device on a particular  day                 | /<device id>/<year>/<month>/<day> | GET        | N/A      | JSON  document | 200 on success, 404 if the device does  not exist, 500 for technical errors |
-| Ranking of the devices in decreasing number of steps over  the last 24 hours | /ranking-last-24-hours            | GET        | N/A      | JSON  document | 200 on success,  500 for technical errors                    |
+| **目的**                                 | **路径**                            | **方法** | **数据** | **响应** | **状态码**                                      |
+| ---------------------------------------- | ----------------------------------- | -------- | -------- | -------- | ----------------------------------------------- |
+| 设备的总步数                             | `/<device id>/total`                | GET      | N/A      | JSON文档 | 200表示成功，404表示设备不存在，500表示技术错误 |
+| 设备在特定月份的步数                     | `/<device id>/<year>/<month>`       | GET      | N/A      | JSON文档 | 200表示成功，404表示设备不存在，500表示技术错误 |
+| 在特定的日子里为一个设备计算步数         | `/<device id>/<year>/<month>/<day>` | GET      | N/A      | JSON文档 | 200表示成功，404表示设备不存在，500表示技术错误 |
+| 将过去24小时内的设备按减少的步骤进行排名 | `/ranking-last-24-hours`            | GET      | N/A      | JSON文档 | 200表示成功，500表示技术错误                    |
 
-Most of the operations are queries for a given device. As you will see in another chapter, the last operation provides an efficient query for getting a device’s ranking, which is useful when the dashboard service starts.
+大多数操作是对给定设备的查询。正如你将在另一章中看到的，最后一个操作提供了一个获取设备排名的有效查询，这在仪表板服务启动时非常有用。
 
-The events sent to the daily.step.updates Kafka topic contain the following information in a JSON document: 
+发送到 *daily.step.updates* kafka主题的事件包含以下信息：
+  - 设备标识符
+  - 时间戳
+  - 当天记录的步数
 
-◾     The device identifier
+对于每个传入的设备更新，需要按照这个顺序进行三个操作:
+  - 一个数据库插入
+  - 一个数据库查询，用于获取设备在当天的步数
+  - 一个Kafka记录写
 
-◾     A timestamp
+这些操作中的每一个都可能失败，而且我们没有一个分布式事务代理。我们保证等幂性和正确性如下:
+  - 我们只在最后一个操作完成后才承认Kafka中传入的设备更新记录。
+  - 数据库模式对所存储的事件强制一些惟一性约束，因此如果再次处理某个事件，插入操作可能会失败。
+  - 我们将重复插入错误作为具有等幂性的正常情况处理，并继续执行接下来的步骤，直到它们全部完成。
+  - 成功编写每日步骤更新记录到KAFKA使我们能够确认初始设备更新记录，并且系统可以通过其他传入记录取得进展。
 
-◾     The number of steps recorded on the current day
+**活动服务**不打算公开，因此就像用**户配置文件服务**一样，没有适当的身份验证。它可以独立于数据库进行扩展。
 
-For each incoming device update, there need to be three operations in this order:
+### 7.4.4 公共API
 
-◾     A database insert
-
-◾     A database query to get the number of steps for the device on the current day
-
-◾     A Kafka record write
-
-Each of these operations may fail, and we don’t have a distributed transaction broker in place. We ensure idempotency and correctness as follows:
-
-◾     We only acknowledge the incoming device update records in Kafka after the last operation has completed.
-
-◾     The database schema enforces some uniqueness constraints on the events being stored, so the insertion operation can fail if an event is being processed again.
-
-◾     We handle a duplicate insertion error as a normal case to have idempotency, and we follow along with the next steps until they have all completed.
-
-◾     Successfully writing a daily steps update record to Kafka allows us to acknowledge the initial device update record, and the system can make progress with the other incoming records.
-
-The activity service is not meant to be publicly exposed, so just like the user profile service, there is no authentication in place. It can be scaled independently of the database.
-
-### 7.4.4 Public API
-
-This service exposes a public HTTP API for other services to consume. It essentially acts as a *facade* over the user profile and activity services, as shown in figure 7.10.
+此服务公开一个公共HTTP API供其他服务使用。它本质上充当用户配置文件和活动服务的“外观”，如**图7.10**所示。
 
 ![](Chapter7-DesigningAReactiveApplication.assets/Figure_7_10.png)
 
-The service is a form of *edge service* or *API gateway* as it forwards and composes requests to other services. Since this is a public HTTP API, the service requires authentication for most of its operations. To do that we’ll use *JSON web tokens* ([https://tools](https://tools.ietf.org/html/rfc7519)
+该服务是一种**边缘服务**或**API网关**的形式，因为它转发和组合请求给其他服务。由于这是一个公共HTTP API，服务的大多数操作都需要身份验证。为了做到这一点，我们将使用*JSON web令牌* (https://tools.ietf.org/html/rfc7519)，我们将在第8章与服务实现一起讨论。因为我们希望公共API可以从任何HTTP客户端使用，包括运行在web浏览器中的JavaScript代码，我们需要支持*跨源资源共享*，或CORS (https://fetch.spec.whatwg.org/#http-cors-protocol)。我们将在适当的时候再次深入研究细节。HTTP API操作如**表7.4**所示。
 
-[.ietf.org/html/rfc7519](https://tools.ietf.org/html/rfc7519)), which we’ll discuss in chapter 8, along with the service implementation. Since we want the public API to be usable from any HTTP client, including JavaScript code running in a web browser, we need to support *cross-origin resource sharing*, or CORS (https://fetch.spec.whatwg.org/#http-cors-protocol). Again we will dig into the details in due time. The HTTP API operations are described in table 7.4.
+**表7.4公共API HTTP接口**
 
-**Table 7.4 Public API HTTP interface**
+| **目的**                                  | **路径**                           | **方法** | **数据**               | **响应**        | **状态码**                              |
+| ----------------------------------------- | ---------------------------------- | -------- | ---------------------- | --------------- | --------------------------------------- |
+| 注册新用户和设备                          | `/register`                        | POST     | 带有注册数据的JSON文档 | N/A             | 成功200，否则502                        |
+| 获取一个JWT令牌来使用API                  | `/token`                           | POST     | 带有凭据的JSON文档     | JWT标记(纯文本) | 成功200，否则401                        |
+| 获取用户数据(需要有效的JWT)               | `/<username>`                      | GET      | N/A                    | JSON文档        | 200表示成功，如果没有找到404，否则为502 |
+| 更新用户数据(需要有效的JWT)               | `/<username>`                      | PUT      | JSON文档               | N/A             | 200表示成功，如果没有找到404，否则为502 |
+| 用户的总步数(需要有效的JWT)               | `/<username>/total`                | GET      | N/A                    | JSON文档        | 200表示成功，如果没有找到404，否则为502 |
+| 一个用户一个月的总步数(需要一个有效的JWT) | `/<username>/<year>/<month>`       | GET      | N/A                    | JSON文档        | 200表示成功，如果没有找到404，否则为502 |
+| 用户一天的总步数(需要有效的JWT)           | `/<username>/<year>/<month>/<day>` | GET      | N/A                    | JSON文档        | 200表示成功，如果没有找到404，否则为502 |
 
-| **Purpose**                                             | **Path**                         | **Method** | **Data**                              | **Response**            | **Status code**                                   |
-| ------------------------------------------------------- | -------------------------------- | ---------- | ------------------------------------- | ----------------------- | ------------------------------------------------- |
-| Register a new user and device                          | /register                        | POST       | JSON document with registra tion data | N/A                     | 200 on success, 502  otherwise                    |
-| Get a JWT token to use the API                          | /token                           | POST       | JSON document with credentials        | JWT token  (plain text) | 200 on success, 401  otherwise                    |
-| Get a user’s data (requires a valid JWT)                | /<username>                      | GET        | N/A                                   | JSON  document          | 200 on success,  404 if not  found, 502 otherwise |
-| Update a user’s data  (requires a valid JWT)            | /<username>                      | PUT        | JSON  document                        | N/A                     | 200 on success, 404 if not  found, 502 otherwise  |
-| Total steps  of a user (requires a valid JWT)           | /<username>/total                | GET        | N/A                                   | JSON  document          | 200 on success,  404 if not  found, 502 otherwise |
-| Total steps of a user in a month (requires a valid JWT) | /<username>/<year>/<month>       | GET        | N/A                                   | JSON  document          | 200 on success,  404 if not  found, 502 otherwise |
-| Total steps of a user on a day (requires a valid JWT)   | /<username>/<year>/<month>/<day> | GET        | N/A                                   | JSON  document          | 200 on success,  404 if not  found, 502 otherwise |
+请注意，请求路径将以`/api/v1`作为前缀，因此请求令牌是对`/api/v1/token`的POST请求。在公共API的url中有一些版本控制方案总是一个好主意。JWT令牌被限制为用于获取它的用户名，因此用户B不能执行，例如，对`/api/v1/a/2019/07/14`的请求。
 
-Note that the request paths will be prefixed with /api/v1, so requesting a token is a POST request to /api/v1/token. It is always a good idea to have some versioning scheme in the URLs of a public API. The JWT tokens are restricted to the username that was used to obtain it, so user B cannot perform, say, a request to /api/v1/A/ 2019/07/14.
+公共API服务可以扩展到多个实例。在生产设置中，负载平衡HTTP代理应该将请求分发给实例。服务中不需要维护任何状态，因为它将请求转发并组合到其他服务。
 
-The public API service can be scaled to multiple instances. In a production setting, a load-balancing HTTP proxy should dispatch requests to the instances. There is no state to maintain in the service, since it forwards and composes requests to the other services.
+### 7.4.5 用户的web应用程序
 
-### 7.4.5 User web application
-
-The user web application provides a way for a user to register, update their details, and check some basic data about their activity. As shown in figure 7.11, there is a backend to serve the web application’s static assets to web browsers over HTTP.
+用户web应用程序为用户提供了一种方式来注册、更新他们的详细信息，并检查有关他们活动的一些基本数据。如**图7.11**所示，有一个后端通过HTTP将web应用程序的静态资源提供给web浏览器。
 
 ![](Chapter7-DesigningAReactiveApplication.assets/Figure_7_11.png)
 
-The frontend is a single-page application written in JavaScript and the Vue.JS framework. It is served by the user web application service, and all interactions with the application’s backend happen through calls to the public API service.
+前端是一个用JavaScript和Vue.JS框架编写的单页应用程序。它由用户web应用程序服务提供，所有与应用程序后端的交互都通过调用公共API服务发生。
 
-As such, this service is more a Vue.JS application than a Vert.x application, although it is still interesting to see how Vert.x serves static content with minimal effort. We could have chosen other popular JavaScript frameworks, or even no framework at all. I find Vue.JS to be a simple and efficient choice. Also, since Vue.JS embraces *reactive idioms*, it makes for a fully reactive application from the backend API to the frontend.
+因此，这个服务更像是一个Vue.JS应用程序，而不是一个Vert.x应用程序，尽管看到Vert.x如何以最少的成本提供静态内容仍然很有趣。我们可以选择其他流行的JavaScript框架，甚至不选择任何框架。我发现Vue.JS是一个简单而高效的选择。另外，由于Vue.JS采用了响应式的习惯用法，它使得从后端API到前端的应用程序完全响应式。
 
-The service itself just serves static files, so it can be scaled to multiple instances and put behind a load balancer in a production setting. There is no state on the server side, either in the service or in the public API in use. It is the frontend application that stores some state in users’ web browsers.
+服务本身只服务静态文件，因此它可以扩展到多个实例，并置于生产设置中的负载均衡器之后。服务器端没有状态，无论是在服务中还是在使用的公共API中。它是前端应用程序，在用户的web浏览器中存储一些状态。
 
-### 7.4.6 Event stats service
+### 7.4.6 事件统计服务(Event stats service  )
 
-The event stats service reacts to selected events from Kafka topics to produce statistics and publish them as Kafka records for other services to consume, as illustrated in figure 7.12.
+事件统计服务对Kafka主题中的选定事件做出反应，生成统计信息，并将其作为Kafka记录发布，供其他服务使用，如**图7.12**所示。
 
 ![](Chapter7-DesigningAReactiveApplication.assets/Figure_7_12.png)
 
-The service performs the following computations:
+该服务执行以下计算：
+  - 基于 5 秒的时间窗口，它根据在 *incoming.steps* 主题上接收到的事件数计算设备更新的吞吐量，然后向 *event-stats.throughput* 主题发出一条记录。
+  - 在 *daily.step.updates* 主题上接收到的事件会携带有关当天来自设备的步数的数据。 此数据缺少用户数据（姓名、城市等），因此对于每个事件，服务都会查询用户配置文件服务以使用用户数据丰富原始记录，然后将其发送到 *event-stats.useractivity.updates* 主题 .
+  - 该服务通过在 5 秒的时间窗口内处理来自 *eventstats.user-activity.update*s 主题的事件来计算城市趋势，并为每个城市发布一个更新，其中包含该城市的汇总步数到 *event -stats.city-trends.updates* 主题。
 
-◾     Based on time windows of five seconds, it computes the throughput of device updates based on the number of events received on the incoming.steps topic, and it then emits a record to the event-stats.throughput topic.
+Kafka 记录可以批量自动确认，因为再次处理记录几乎没有危害，特别是对于吞吐量和城市趋势计算。 为了确保为活动更新准确地生成一条记录，手动确认是可能的，尽管偶尔的重复记录不应该影响消费服务。
 
-◾     Events received on the daily.step.updates topic carry data on the number of steps from a device on the current day. This data lacks user data (name, city, etc.), so for each event the service queries the user profile service to enrich the original record with user data, and then sends it to the event-stats.useractivity.updates topic.
+**事件统计服务**并不意味着是公共的，而且它不为其他服务提供任何接口。最后，由于计算的性质，应该将服务部署为单个实例。
 
-◾     The service computes city trends by processing the events from the eventstats.user-activity.updates topic over time windows of five seconds, and for each city it publishes an update with the aggregated number of steps for that city to the event-stats.city-trends.updates topic.
+### 7.4.7 祝贺服务(Congrats service  )
 
-Kafka records can be acknowledged in an automatic fashion by batches, as there is little harm in processing a record again, especially for the throughput and city trends computations. To ensure that exactly one record is produced for an activity update, a manual acknowledgement is possible, although an occasional duplicate record should not impact a consuming service.
-
-The event stats service is not meant to be public, and it does not offer any interface for other services. Finally, the service should be deployed as a single instance due to the nature of the computations.
-
-### 7.4.7 Congrats service
-
-The role of the congrats service is to monitor when a device reaches at least 10,000 steps on a day, and then to send a congratulation email to the owner, as shown in figure 7.13.
+祝贺服务的作用是监控设备每天何时达到至少10,000步，然后向所有者发送祝贺邮件，如图7.13所示。
 
 ![](Chapter7-DesigningAReactiveApplication.assets/Figure_7_13.png)
 
-The service makes calls to the user profile service to get the email of the user associated with a device, and then it contacts an SMTP server to send an email.
+该服务调用用户配置文件服务来获取与设备关联的用户的电子邮件，然后联系SMTP服务器发送电子邮件。
 
-Note that we could have reused the event-stats.user-activity.updates Kafka topic fed by the event stats service, as it enriches the messages received from daily.step.updates with user data, including an email address. An implementation detail in how Kafka record keys are being produced for both topics makes it simpler to enforce that at most one message is sent to a user each day by using the records from daily.step.updates and then getting the email from the user profile service. This does not add much network and processing overhead either, since a user must receive an email only for the first activity update with at least 10,000 steps on a given day.
+注意，我们可以重用*event-stats.user-activity.updates* Kafka主题由事件统计服务提供，因为它丰富了从*daily.step.updates*接收到的用户数据消息，包括电子邮件地址。Kafka记录键是如何为两个主题产生的实现细节使它更简单，通过使用*daily.step.updates*记录，每天最多发送一条消息给用户，然后从用户档案服务获取电子邮件。这也不会增加太多的网络和处理开销，因为用户必须在给定的一天中收到至少10,000步的第一个活动更新的电子邮件。
 
-This service is not to be publicly exposed, and it does not expose any API. A single instance should suffice in a production setting, but the service can be scaled to multiple instances sharing the same Kafka consumer group so that they can split the workload among them.
+此服务不公开，也不公开任何 API。 单个实例在生产环境中就足够了，但服务可以扩展到多个实例共享同一个 Kafka 消费者组，以便它们可以在它们之间分配工作负载。
 
-### 7.4.8 Dashboard web application
+### 7.4.8 仪表板web应用程序
 
-The dashboard web application offers live updates on the incoming updates throughput, city trends, and public user ranking. As seen in figure 7.14, the service consumes Kafka records emitted by the event stats service and regularly pushes updates to the web application.
+仪表板web应用程序提供关于传入更新吞吐量、城市趋势和公共用户排名的实时更新。如**图7.14**所示，该服务使用事件统计服务发出的Kafka记录，并定期向web应用程序推送更新。
 
 ![](Chapter7-DesigningAReactiveApplication.assets/Figure_7_14.png)
 
-The web application is written using the Vue.JS framework, just like the user web application described earlier. The frontend and backend are connected using the Vert.x event bus, so both the Vert.x and Vue.JS code bases can communicate with the same programming model.
+web应用程序是使用Vue.JS框架编写的，就像前面描述的用户web应用程序一样。前端和后端使用Vert.x事件总线连接，因此Vert.x和Vue.JS代码库可以使用相同的编程模型进行通信。
 
-Throughput and city trend updates from Kafka topics are directly forwarded over the Vert.x event bus, so the connected web application client receives the updates in real time. The backend maintains in-memory data about the number of steps over the last 24 hours for all users who have made their profile public. The ranking is updated every 5 seconds, and the result is pushed to the web application over the event bus so that the ranking is updated in the connected web browsers.
+吞吐量和来自Kafka主题的城市趋势更新直接通过Vert.x事件总线转发，因此连接的web应用客户端实时接收更新。后端在内存中维护关于过去24小时内已公开其概要文件的所有用户的步数的数据。排名每5秒更新一次，结果会通过事件总线推送给web应用程序，这样排名就会在连接的web浏览器中更新。
 
-Since the backend is event-driven over Kafka topics, a good question is what happens when the service starts (or when it recovers from a crash). Indeed, on a fresh start we do not have all the step data from the last 24 hours, and we will only receive updates from the service’s start time.
+由于后端是事件驱动的，在Kafka主题上，一个很好的问题是当服务启动时(或者当它从崩溃中恢复时)会发生什么。事实上，在一个新的开始，我们没有过去24小时的所有步骤数据，我们只会从服务的开始时间接收更新。
 
-We need a *hydration* phase when the service starts, where we query the activity service and get the rankings over the last 24 hours. We then need to query the user profile service for each entry of the ranking, since we need to correlate each device with a user profile. This is a potentially costly operation, but it shouldn’t happen very often.
+当服务开始时，我们需要一个“补水”阶段，在此我们查询活动服务并获得过去24小时内的排名。然后，我们需要为排名的每个条目查询用户配置文件服务，因为我们需要将每个设备与用户配置文件关联起来。这是一个潜在的昂贵的操作，但它不应该经常发生。
 
-Note that waiting for the hydration to complete does not prevent the processing of user activity updates, as eventually only the most recent value from either a Kafka record or the hydration data will prevail when updating the in-memory data.
+请注意，等待水合完成不会阻止处理用户活动更新，因为在更新内存数据时，最终只有来自 Kafka 记录或水合数据的最新值才会占上风。
 
-The dashboard web application service is meant to be publicly exposed. It can be scaled to multiple instances if need be, and it can be put behind an HTTP proxy load balancer.
+仪表板web应用程序服务应该是公开的。如果需要，它可以扩展到多个实例，并且可以放在HTTP代理负载均衡器之后。
 
-### 7.5 Running the application
+### 7.5 运行应用程序
 
-To run the application, you need to run all the infrastructure services and all the microservices. The complete source code of the application can be found in the part2-steps-challenge folder of the source code repository.
+要运行应用程序，您需要运行所有基础设施服务和所有微服务。 应用程序的完整源代码可以在源代码存储库的 part2-steps-challenge 文件夹中找到。
 
-First of all, Docker must be installed on your machine, because building the application requires containers to be started while executing test suites. The application can be built with Gradle using the gradle assemble command, or with gradle build if you also want to run the tests as part of the build and have Docker running.
+首先，Docker 必须安装在您的机器上，因为构建应用程序需要在执行测试套件时启动容器。 可以使用 Gradle 使用 *gradle assemble* 命令构建应用程序，或者如果您还想在构建过程中运行测试并运行 Docker，则可以使用 *gradle build* 构建应用程序。
 
-Once the application services have been built, you will need to run all infrastructure services like PostgreSQL, MongoDB, Apache Kafka, and so on. You can greatly simplify the task by running them from Docker containers. To do that, the docker-compose.yml file describes several containers to be run with Docker Compose, a simple and effective tool for managing several containers at once. Running docker-compose up will start all the containers, and docker-compose down will stop and remove them all. You can also press Ctrl+C in a terminal running Docker Compose, and it will stop the containers (but not remove them, so they can be started with the current state again).
+一旦应用程序服务已经构建，你将需要运行所有基础设施服务，如PostgreSQL, MongoDB, Apache Kafka，等等。通过在Docker容器中运行它们，可以大大简化任务。为此，需要使用*docker-compose.yml*文件描述了使用Docker Compose运行的几个容器，这是一个简单而有效的工具，用于同时管理多个容器。运行*docker-compose* up将启动所有容器，而*docker-compose* down将停止并删除所有容器。你也可以在运行Docker Compose的终端中按下**Ctrl+C**，它会停止容器(但不会删除它们，所以它们可以以当前状态再次启动)。
 
-> **TIP** On macOS and Windows, I recommend installing Docker Desktop. Most Linux distributions offer Docker as a package. Note that docker needs to run as root, so on Linux you may need to add your user to a special group to avoid using sudo. The official Docker documentation provides troubleshooting instructions (https://docs.docker.com/engine/install/linux-postinstall/). In all cases, make sure that you can successfully run the docker run hello-world command as a user.
+> **💡提示:** 在 macOS 和 Windows 上，我建议安装 Docker Desktop。 大多数 Linux 发行版都将 Docker 作为一个包提供。 请注意，*docker* 需要以 *root* 身份运行，因此在 Linux 上，您可能需要将您的用户添加到特殊组以避免使用 *sudo*。 Docker 官方文档提供了故障排除说明 (https://docs.docker.com/engine/install/linux-postinstall/)。 在所有情况下，请确保您可以以用户身份成功运行 *docker run hello-world* 命令。
 
-The container images that we will need to run are the following:
+我们需要运行的容器镜像如下：
+  - MongoDB 使用初始化脚本来准备集合和索引
+  - PostgreSQL 带有一个初始化脚本来创建模式
+  - 来自 Strimzi 项目图像的 Apache Kafka 和 Apache ZooKeeper（参见[https://strimzi.io）
+  - ActiveMQ Artemis
+  - MailHog，一个适合集成测试的 SMTP 服务器 (https://github.com/mailhog/MailHog）
 
-◾     MongoDB with an initialization script to prepare a collection and indexes
-
-◾     PostgreSQL with an initialization script to create the schema
-
-◾     Apache Kafka with Apache ZooKeeper from the Strimzi project images (see [https://strimzi.io](https://strimzi.io/))
-
-◾     ActiveMQ Artemis
-
-◾     MailHog, an SMTP server suitable for integration testing ([https://github.com/](https://github.com/mailhog/MailHog) [mailhog/MailHog](https://github.com/mailhog/MailHog))
-
-All microservices are packaged as self-contained executable JAR files. For example, you can run the activity service as follows:
+所有微服务都打包为自包含的可执行 JAR 文件。 例如，您可以按如下方式运行活动服务：
 
 ```
 $ java -jar activity-service/build/libs/activity-service-all.jar
 ```
 
-That being said, starting all services manually is not very convenient, so the project also contains a Procfile file to run all the services. The file contains lines with service names and associated shell commands. You can then use the Foreman tool to run the services (https://github.com/ddollar/foreman) or a compatible tool like Hivemind (https://github.com/DarthSim/hivemind):
+也就是说，手动启动所有服务不是很方便，所以项目还包含一个Procfile文件来运行所有服务。该文件包含带有服务名称和相关shell命令的行。然后，您可以使用Foreman工具来运行这些服务(https://github.com/ddollar/foreman)或兼容的工具，比如Hivemind (https://github.com/DarthSim/hivemind):
 
 ```
 $ foreman start
 ```
 
-This is very convenient, as you can run all the services from two terminal panes, as illustrated in figure 7.15.
+这非常方便，因为您可以从两个终端窗口运行所有服务，如**图7.15**所示。
 
-Foreman can also generate various system service descriptors from a Procfile: initab, launchd, systemd, and more. Finally, Foreman is written in Ruby, but there are also ports to other languages listed on the project page.
+Foreman还可以从Procfile中生成各种系统服务描述符:initab、launchd、systemd等等。最后，Foreman是用Ruby编写的，但是在项目页面上也列出了对其他语言的移植。
 
->  **TIP** Foreman simplifies running all services, but you don’t have to use it. You can run each individual service on the command line. The content of Procfile will show you the exact command for each service.
+>  **💡提示:** Foreman 简化了所有服务的运行，但您也可以不使用它。 您可以在命令行上运行每个单独的服务。 Procfile 的内容将向您显示每个服务的确切命令。
 
-The next chapters will illustrate the challenges of implementing a reactive application by building on top of a set of (imperfect!) microservices that cover the topics of web, APIs, messaging, data, and continuous stream processing. In the next chapter, we’ll explore the web stack used to implement some of the services described in this chapter.
+下一章将通过构建一组（不完美！）微服务来说明实现反应式应用程序的挑战，这些微服务涵盖了 Web、API、消息传递、数据和连续流处理等主题。 在下一章中，我们将探索用于实现本章中描述的一些服务的 Web 栈。
 
 ![](Chapter7-DesigningAReactiveApplication.assets/Figure_7_15.png)
 
-## Summary
-
-◾     A reactive application focuses on controlling latency under various workloads and in the presence of failures from other services.
-
-◾     A reactive application can be decomposed as a set of independently scaled event-driven microservices.
+## 总结
+  - 反应式应用程序专注于控制各种工作负载下的延迟以及其他服务出现故障的情况。
+  - 反应式应用程序可以分解为一组独立扩展的事件驱动微服务。
 
