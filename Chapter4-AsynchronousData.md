@@ -1,5 +1,7 @@
 # 第四章: 异步数据和事件流
 
+> 翻译: 白石(https://github.com/wjw465150/Vert.x-in-Action-ChineseVersion)
+
 **本章涵盖了**
 
   - 为什么流是事件之上的有用抽象

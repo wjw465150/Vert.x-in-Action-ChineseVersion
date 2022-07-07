@@ -1,445 +1,411 @@
 # 第十章: Persistent state management with databases
 
+> 翻译: 白石(https://github.com/wjw465150/Vert.x-in-Action-ChineseVersion)
+
 **本章涵盖**
+  - 使用 MongoDB 存储数据和验证用户
+  - 从 Vert.x 使用 PostgreSQL
+  - 与数据库交互的事件驱动服务的集成测试策略
 
-◾     Storing data and authenticating users with MongoDB
+响应式应用程序倾向于无状态设计，但是状态必须在某个地方进行管理。
 
-◾     Using PostgreSQL from Vert.x
+数据库在大多数应用程序中都是必不可少的，因为需要存储、检索和查询数据。 数据库可以存储各种数据，例如应用程序状态、事实或用户凭据。 市场上有不同类型的数据库：一些是通用的，而另一些则专门用于某些类型的用例、访问模式和数据。
 
-◾     Testing strategies for integration testing of eventdriven services that interact with databases
+在本章中，我们将通过深入研究用户和活动服务的实现来探索 Vert.x 的数据库和状态管理。 这些服务将允许我们使用面向文档的数据库 (MongoDB) 和关系数据库 (PostgreSQL)。 您还将了解如何使用 MongoDB 对用户进行身份验证，以及如何为数据驱动的服务编写集成测试。
 
-Reactive applications favor stateless designs, but state has to be managed somewhere. 
+## 10.1 数据库 和 Vert.x
 
-Databases are essential in most applications, because data needs to be stored, retrieved, and queried. Databases can store all kinds of data, such as application state, facts, or user credentials. There are different types of databases on the market: some are generalist and others are specialized for certain types of use cases, access patterns, and data.
+Vert.x 提供了广泛的客户端来连接数据源。 这些客户端包含与服务器通信的驱动程序，可以提供有效的连接管理，如连接池。 这对于构建各种服务很有用，从数据源支持的 API 到混合数据源、消息传递和 API 的集成服务。
 
-In this chapter we’ll explore database and state management with Vert.x by diving into the implementation of the user and activity services. These services will allow us to use a document-oriented database (MongoDB) and a relational database (PostgreSQL). You will also see how you can use MongoDB for authenticating users, and how to write integration tests for data-driven services.
+### 10.1.1 Eclipse Vert.x 栈提供了什么
 
-## 10.1 Databases and Vert.x
+Eclipse Vert.x 项目提供了表 10.1 中列出的数据客户端模块。
 
-Vert.x offers a wide range of clients for connecting to data sources. These clients contain drivers that talk to servers, and that may offer efficient connection management, like connection pooling. This is useful for building all kinds of services, from APIs backed by a data source to integration services that mix data sources, messaging, and APIs.
+**表 10.1 Eclipse Vert.x 支持的数据客户端模块**
 
-### 10.1.1 What the Eclipse Vert.x stack provides
-
-The Eclipse Vert.x project provides the data client modules listed in table 10.1.
-
-**Table 10.1 Data client modules supported by Eclipse Vert.x**
-
-| **Identifier**                          | **Description**                                              |
+| **标识符**                              | **描述**                                                     |
 | --------------------------------------- | ------------------------------------------------------------ |
-| vertx-mongo-client                      | MongoDB is a document-oriented database.                     |
-| vertx-jdbc-client                       | Supports any relational database that offers a JDBC driver.  |
-| vertx-pg-client and  vertx-mysql-client | Access PostgreSQL and MySQL  relational databases through dedicated Vert.x reactive drivers. |
-| vertx-redis-client                      | Redis is versatile data structure store.                     |
-| vertx-cassandra-client                  | Apache Cassandra is a database tailored for very large volumes of data. |
+| vertx-mongo-client                      | MongoDB 是一个面向文档的数据库。                             |
+| vertx-jdbc-client                       | 支持任何提供 JDBC 驱动程序的关系数据库。                     |
+| vertx-pg-client and  vertx-mysql-client | 通过专用的 Vert.x 反应式驱动程序访问 PostgreSQL 和 MySQL 关系数据库。 |
+| vertx-redis-client                      | Redis 是一种通用的数据结构存储。                             |
+| vertx-cassandra-client                  | Apache Cassandra 是为大量数据量身定制的数据库。              |
 
-You can find drivers for other kinds of data sources in the larger Vert.x community. Those are beyond the scope of the project at the Eclipse Foundation.
+您可以在更大的 Vert.x 社区中找到其他类型数据源的驱动程序。 这些超出了 Eclipse 基金会项目的范围。
 
-MongoDB is a popular document-oriented database; it is a good match with Vert.x since it manipulates JSON documents. Redis is an in-memory data structure store with configurable on-disk data snapshots that can be used as a cache, as a database, and as a message broker. Apache Cassandra is a multinode, replicated database designed for storing huge amounts of data. Cassandra is well suited for databases where size is measured in hundreds of terabytes or even petabytes. You can, of course, use it for just a few terabytes, but a more traditional database may suffice in these cases.
+MongoDB 是一种流行的面向文档的数据库； 它与 Vert.x 非常匹配，因为它操作 JSON 文档。 Redis 是一种内存数据结构存储，具有可配置的磁盘数据快照，可用作缓存、数据库和消息代理。 Apache Cassandra 是一个多节点的复制数据库，设计用于存储大量数据。 Cassandra 非常适合大小以数百 TB 甚至 PB 为单位的数据库。 当然，您可以只使用几 TB，但在这些情况下，更传统的数据库可能就足够了。
 
-Speaking of “traditional” relational databases, Vert.x can connect to *anything* for which there is a JDBC driver. That being said, JDBC is an older protocol based on a multithreaded design and blocking I/O. The JDBC support in Vert.x offloads database calls to worker thread pools, and it pushes results back to event-loop contexts. This is to avoid blocking event loops, since JDBC calls do block. This design limits scalability, as worker threads are needed, but for moderate workloads it should be fine.
+说到“传统”关系数据库，Vert.x 可以连接到有 JDBC 驱动程序的*任何东西*。 话虽如此，JDBC 是一种基于多线程设计和阻塞 I/O 的旧协议。 Vert.x 中的 JDBC 支持将数据库调用卸载到工作线程池，并将结果推送回事件循环上下文。 这是为了避免阻塞事件循环，因为 JDBC 调用会阻塞。 这种设计限制了可扩展性，因为需要工作线程，但对于中等工作负载应该没问题。
 
-If you use PostgreSQL or MySQL, Vert.x provides its own reactive drivers. These drivers implement the network protocols of each database server, and they are built in a purely asynchronous fashion using Netty, the networking foundation of Vert.x. The drivers offer excellent performance, both in terms of latency and concurrent connections. They are also very stable and implement the current protocols and features of the databases. You should prefer the Vert.x reactive driver clients for PostgreSQL and MySQL, and use the JDBC client when you need to connect to other databases.
+如果您使用 PostgreSQL 或 MySQL，Vert.x 提供了自己的响应式驱动程序。 这些驱动程序实现了每个数据库服务器的网络协议，它们是使用 Vert.x 的网络基础 Netty 以纯异步方式构建的。 这些驱动程序在延迟和并发连接方面都提供了出色的性能。 它们也非常稳定并实现了数据库的当前协议和功能。 您应该更喜欢 PostgreSQL 和 MySQL 的 Vert.x 反应式驱动程序客户端，并在需要连接到其他数据库时使用其 JDBC 客户端。
 
-If you are looking for a solid database, PostgreSQL is probably a good bet. PostgreSQL is versatile and has been used in all sorts of small and large-scale projects over the years. You can, of course, use it as a traditional relational database, but it also supports JSON documents as first-class objects, and geographic objects through the PostGIS extension.
+如果您正在寻找可靠的数据库，PostgreSQL 可能是一个不错的选择。 PostgreSQL 用途广泛，多年来一直用于各种小型和大型项目。 当然，您可以将其用作传统的关系数据库，但它还支持 JSON 文档作为一级对象，以及通过 PostGIS 扩展支持地理对象。
 
-### 10.1.2 A note on data/object mapping, and why you may not always need it
+### 10.1.2 关于数据/对象映射的说明，以及为什么您可能并不总是需要它
 
-Before we dive into the user profile service design and implementation with MongoDB, I would like to quickly discuss certain established idioms of enterprise Java development, and explain why, in search of simplicity and efficiency, the code in this chapter deviates intentionally from supposed best practices.
+在我们深入探讨 MongoDB 的用户配置服务设计和实现之前，我想快速讨论一些企业 Java 开发的既定习惯用法，并解释为什么为了**简单**和**高效**，本章中的代码会故意偏离假定的最佳实践 .
 
-The code of the 10k steps challenge may surprise you, because it does not perform object data mapping, where any data has to be mapped to some Java object model that represents the application domain, such as data transfer objects (DTOs). For instance, some JSON data representing a pedometer update would be mapped to a DeviceUpdate Java class before any further processing was done. Here we will directly manipulate data in JsonObject instances as they flow between HTTP, Kafka, and database interfaces. We will not map, say, device update JSON data to DeviceUpdate; we will work with the JsonObject representation of that data instead.
+1万步挑战的代码可能会让您感到惊讶，因为它不执行对象数据映射，其中任何数据都必须映射到代表应用程序域的一些 Java 对象模型，例如数据传输对象 (DTO)。 例如，一些表示计步器更新的 JSON 数据将在完成任何进一步处理之前映射到 *DeviceUpdate* Java 类。 在这里，我们将直接操作 *JsonObject* 实例中的数据，因为它们在 HTTP、Kafka 和数据库接口之间流动。 例如，我们不会将设备更新JSON数据映射到 *DeviceUpdate*； 我们将改为使用该数据的 *JsonObject* 表示。
 
-Vert.x does allow you to do data mapping from and to Java classes, but unless the object model contains some significant business logic or can be leveraged by some processing in a third-party library, I see little value in doing any form of data binding. I advocate such a design for several reasons:
+Vert.x允许在Java类之间进行数据映射，但是除非对象模型包含一些重要的业务逻辑，或者可以被第三方库中的一些处理利用，否则我认为进行任何形式的数据绑定都没有什么价值。我提倡这样的设计有以下几个原因:
+  - 它使我们免于编写除了暴露琐碎的 getter 和 setter 之外没有其他功能的类。
+  - 它避免了对生命周期通常较短的对象进行不必要的分配（例如，处理 HTTP 请求的生命周期）。
+  - 数据并不总是很容易映射到对象模型，您可能并不对所有数据感兴趣，而是对一些选定的条目感兴趣。
+  - 在关系数据库的情况下，对象和模型存在一些众所周知的不匹配，这些不匹配会导致复杂的映射和由于查询过多而导致的性能下降。
+  - 它最终会导致更多的功能的代码。
 
-◾     It saves us from writing classes that have no functionality except exposing trivial getters and setters.
+如果您有疑问，请始终问自己是否真的需要对象模型，或者数据表示是否足以满足您正在进行的处理工作。 如果您的对象模型只包含 getter 和 setter，那么（至少在最初）您不需要它可能是一个好兆头。
 
-◾     It avoids unnecessary allocation of objects with typically short lifetimes (e.g., the lifespan of processing an HTTP request).
+现在让我们深入研究在用户配置文件服务中使用 MongoDB。
 
-◾     Data is not always easy to map to an object model, and you may not be interested in all the data, but rather in some selected entries.
+## 10.2 使用 MongoDB 的用户配置文件服务
 
-◾     In the case of relational databases, the object and the models have some well-known mismatches that can result in complex mappings and bad performance due to excessive queries.
+用户配置文件服务管理用户数据，例如姓名、电子邮件和城市，它还用于根据登录/密码凭据对用户进行身份验证。 其他需要检索数据并将数据与用户信息相关联的服务使用此服务。
 
-◾     It eventually leads to code that is more functional.
+用户服务使用 MongoDB 有两个目的：
+  - 存储用户数据：用户名、密码、电子邮件、城市、设备标识符，以及数据是否应出现在公开排名中
+  - 根据用户名加密码组合对用户进行身份验证
 
-If you’re in doubt, always ask yourself whether you actually need an object model, or whether the data representation is good enough for the processing work that you are doing. If your object model consists of nothing but getters and setters, perhaps it’s a good sign that (at least initially) you don’t need it.
+MongoDB 非常适合这里，因为它是一个文档数据库； 每个用户都可以表示为一个文档。 我们将使用 *vertx-mongo-client* 模块连接到 MongoDB 实例，我们将使用 *vertx-auth-mongo* 模块进行身份验证。
 
-Let’s now dive into using MongoDB in the user profile service.
+### 10.2.1 数据模型
 
-## 10.2 User profile service with MongoDB
+*vertx-auth-mongo* 模块是在 MongoDB 数据库之上进行用户身份验证的交钥匙解决方案，因为它管理正确存储和检索凭据的所有复杂性。 它实现了模块*vertx-auth-common*的通用认证接口。 它特别处理使用 *salt* 值存储密码的加密哈希，因为存储实际密码从来都不是一个好主意。 根据 *vertx-auth-mongo* 模块中定义的约定，目标数据库中的每个用户都有一个文档，其中包含以下条目：
+  - **username** - 用户名的字符串
+  - **salt** - 用于保护密码的随机数据字符串
+  - **password** - 通过从实际密码加上盐值计算 SHA-512 哈希得到的字符串
+  - **roles** - 定义 *roles* 的字符串数组（例如“administrator”）
+  - **permissions** - 定义 *permissions* 的字符串数组（例如“can_access_beta”）。
 
-The user profile service manages user data such as name, email, and city, and it’s also used to authenticate a user against login/password credentials. This service is used by other services that need to retrieve and correlate data against user information.
+在我们的例子中，我们不会使用角色和权限，因为所有用户都是平等的，所以这些条目将是空数组。 我们不必处理处理盐和密码哈希的微妙之处，因为这是由身份验证模块处理的。
 
-The user service makes use of MongoDB for two purposes:
+虽然此数据模型由 *vertx-auth-mongo* 规定，但没有什么能阻止我们向代表用户的文档添加更多字段。 因此，我们可以添加以下条目：
+  - **city** - 用户所在城市的字符串
+  - **deviceId** - 计步器设备标识符的字符串
+  - **email** - 用户电子邮件地址的字符串
+  - **makePublic** - 一个布尔值，指示用户是否希望出现在公共排名中
 
-◾     Storing user data: username, password, email, city, device identifier, and whether data should appear in public rankings
+我们还将对 MongoDB 索引强制执行两个完整性约束：*username* 和 *deviceId* 在所有文档中都必须是唯一的。 这避免了重复的用户名以及两个用户拥有相同的设备。 这将在注册新用户时带来正确性挑战，因为我们将无法使用任何交易机制。 当 *deviceId* 唯一性约束防止重复插入时，我们将需要回滚部分数据插入。
 
-◾     Authenticating users against a username plus password combination
+现在让我们看看如何使用 Vert.x MongoDB 客户端和 Vert.x 身份验证支持。
 
-MongoDB is a good fit here because it is a document database; each user can be represented as a document. We will use the vertx-mongo-client module to connect to MongoDB instances, and we will use the vertx-auth-mongo module for authentication.
+### 10.2.2 用户配置文件 API Verticle 和初始化
 
-### 10.2.1 Data model
+*UserProfileApiVerticle* 类公开了用户配置文件服务的 HTTP API。 它包含三个重要字段：
 
-The vertx-auth-mongo module is a turnkey solution for doing user authentication on top of a MongoDB database, as it manages all the intricacies of properly storing and retrieving credentials. It implements the common authentication interface of module vertx-auth-common. It especially deals with storing cryptographic hashes of passwords with a *salt* value, because storing actual passwords is never a good idea. According to the conventions defined in the vertx-auth-mongo module, there is a document for each user in the target database with the following entries:
+  - **mongoClient**，类型为 *MongoClient*，用于连接到 MongoDB 服务器。
+  - **authProvider**，类型为 *MongoAuthentication*，用于使用 MongoDB 执行身份验证检查。
+  - **userUtil**，类型为 *MongoUserUtil*，用于帮助创建新用户。
 
-◾     username—A string for the username
+我们从 *rxStart* verticle 初始化方法初始化这些字段（因为我们使用 RxJava），如下面的清单所示。
 
-◾     salt—A random data string used to secure the password
+![清单 10.1 初始化 MonbgoDB 客户端和身份验证提供程序](Chapter10-Persistent.assets/Listing_10_1.png)
 
-◾     password—A string made by computing the SHA-512 hash from the actual password plus the salt value
+身份验证提供程序依附于MongoDB客户端实例，该实例的配置如下面的清单所示。按照Vert.x MongoDB身份验证模块的约定，我们为身份验证提供者传递了空的配置选项。在添加用户时帮助我们的实用程序也是如此。
 
-◾     roles—An array of strings defining *roles* (such as “administrator”)
+![清单 10.2 MongoDB 客户端配置方法](Chapter10-Persistent.assets/Listing_10_2.png)
 
-◾     permissions—An array of strings defining *permissions* (such as “can_access
+由于我们公开了一个 HTTP API，我们将使用 Vert.x Web 路由器来配置要由服务处理的各种路由，如下面的清单所示。
 
-_beta”).
+![清单 10.3 用户配置文件服务 HTTP 路由](Chapter10-Persistent.assets/Listing_10_3.png)
 
-In our case, we won’t use roles and permissions, since all users will be equal, so these entries will be empty arrays. We will not have to deal with the subtleties of handling salts and password hashing, as this is taken care of by the authentication module.
+请注意，我们使用两个链式处理程序进行注册。 第1个处理程序用于数据验证，第2个处理程序用于实际处理逻辑。 但是验证逻辑是什么？
 
-While this data model is prescribed by vertx-auth-mongo, nothing precludes us from adding more fields to the documents that represent users. We can thus add the following entries:
+### 10.2.3 验证用户输入
 
-◾     city—A string for the user’s city
+注册是一个关键步骤，所以我们必须确保数据是有效的。 我们必须检查传入的数据（一个 JSON 文档）是否包含所有必填字段，并且它们都是有效的。 例如，我们需要检查电子邮件是否真的是电子邮件，并且用户名不为空且不包含不需要的字符。
 
-◾     deviceId—A string for the pedometer device identifier
+以下清单中的 *validateRegistration* 方法将验证委托给辅助方法 *anyRegistrationFieldIsMissing* 和 *anyRegistrationFieldIsWrong*。
 
-◾     email—A string for the user’s email address
+![清单 10.4 注册验证方法](Chapter10-Persistent.assets/Listing_10_4.png)
 
-◾     makePublic—A Boolean to indicate whether or not the user wants to appear in public rankings
+当任何验证步骤失败时，我们会返回 400 HTTP 状态码； 否则，我们调用下一个处理程序，在我们的例子中将是 *register* 方法。
 
-We’ll also enforce two integrity constraints with MongoDB indexes: both username and deviceId must be unique across all documents. This avoids duplicate user names as well as two users having the same device. This will pose a correctness challenge when registering new users, because we will not be able to use any transaction mechanism. We will need to roll back partial data inserts when the deviceId uniqueness constraint prevents a duplicate insert.
+*anyRegistrationFieldIsMissing* 方法的实现非常简单。 我们检查提供的 JSON 文档是否包含必填字段，如下所示。
 
-Let’s now look at how we can use the Vert.x MongoDB client and Vert.x authentication support.
+![清单 10.5 检查缺少的 JSON 字段](Chapter10-Persistent.assets/Listing_10_5.png)
 
-### 10.2.2 User profile API verticle and initialization
+*anyRegistrationFieldIsWrong* 方法将检查委托给正则表达式，如下面的清单所示。
 
-The UserProfileApiVerticle class exposes the HTTP API for the user profile service. It holds three important fields:
+![清单 10.6 验证特定字段](Chapter10-Persistent.assets/Listing_10_6.png)
 
-◾     mongoClient, of type MongoClient, is used to connect to a MongoDB server.
+*validDeviceId* 正则表达式与 *validUsername* 相同。 验证电子邮件地址 (*validEmail*) 是一种更复杂的正则表达式。 为此，我选择使用开放 Web 应用程序安全项目 (OWASP) 中的一种安全正则表达式 (www.owasp.org/index.php/OWASP_Validation_Regex)。
 
-◾     authProvider, of type MongoAuthentication, is used to perform authentication checks using MongoDB.
+现在我们已经验证了数据，是时候注册用户了。
 
-◾     userUtil, of type MongoUserUtil, is used to facilitate new user creation.
+### 10.2.4 在 MongoDB 中添加用户
 
-We initialize these fields from the rxStart verticle initialization method (since we use RxJava), as shown in the following listing.
+在数据库中插入新用户需要两个步骤：
 
-![](Chapter10-Persistent.assets/Listing_10_1.png)
+  1. 我们需要让助手插入一个新用户，因为它还会处理其他方面，例如哈希密码和具有盐值。
+  2. 我们需要更新用户文档以添加身份验证提供程序模式不需要的额外字段。
 
-The authentication provider piggybacks on the MongoDB client instance, which is configured as in the next listing. We pass empty configuration options for the authentication provider as we follow the conventions of the Vert.x MongoDB authentication module. The same goes with the utility that will help us when adding users.
+![图 10.1 成功添加用户的步骤](Chapter10-Persistent.assets/Figure_10_1.png)
 
-![](Chapter10-Persistent.assets/Listing_10_2.png)
+由于这是一个两步数据插入，我们不能使用任何事务管理工具，我们需要自己处理数据完整性，如**图 10.1** 所示。
 
-Since we are exposing an HTTP API, we’ll use a Vert.x web router to configure the various routes to be handled by the service, as shown in the following listing.
+幸运的是，RxJava 使错误管理声明性，因此我们不必处理异步操作的嵌套条件，这对于回调或 Promise/Future 来说会很复杂。
 
-![](Chapter10-Persistent.assets/Listing_10_3.png)
+*register* 方法首先从 HTTP 请求中提取 JSON 有效负载，然后是要创建的用户的用户名和密码，如下所示。
 
-Note that we use two chained handlers for the registration. The first handler is for data validation, and the second handler is for the actual processing logic. But what is in the validation logic?
+![清单 10.7 注册方法的前言](Chapter10-Persistent.assets/Listing_10_7.png)
 
-### 10.2.3 Validating user input
+请记住，*register* 在验证后调用，因此我们希望 JSON 数据是好的。 我们向身份验证提供者传递用户名和密码。 还有一种形式，*rxCreateUser* 接受2个额外的列表来定义角色和权限。 然后助手用一个新文档填充数据库。
 
-Registration is a critical step, so we must ensure that the data is valid. We must check that the incoming data (a JSON document) contains all required fields, and that they are all valid. For instance, we need to check that an email is actually an email, and that a username is not empty and does not contain unwanted characters.
+接下来，我们必须运行查询来更新新创建的文档并附加新条目。 MongoDB 查询显示在以下清单中，并表示为JSON对象。
 
-The validateRegistration method in the following listing delegates the validation to the helper methods anyRegistrationFieldIsMissing and anyRegistrationFieldIsWrong.
+![清单 10.8 更新新用户的 MongoDB 查询](Chapter10-Persistent.assets/Listing_10_8.png)
 
-![](Chapter10-Persistent.assets/Listing_10_4.png)
+因此，我们必须将 *rxInsertUser* 操作与 MongoDB 更新查询链接，知道 *rxInsertUser* 返回一个 `Single<String>` ，其中值是新文档的标识符。 下面的清单显示了使用 RxJava 的完整用户添加处理。
 
-When any validation steps fails, we respond with a 400 HTTP status code; otherwise, we call the next handler, which in our case will be the register method.
+![清单 10.9 使用 RxJava 完成用户添加处理](Chapter10-Persistent.assets/Listing_10_9.png)
 
-The implementation of the anyRegistrationFieldIsMissing method is quite
+*flatMapMaybe* 运算符允许我们链接两个查询。
 
-simple. We check that the provided JSON document contains the required fields, as follows.
+*insertExtraInfo* 方法显示在下一个清单中并返回 *MaybeSource*，因为如果没有找到匹配的文档，查找和更新文档可能不会保存结果。
 
-![](Chapter10-Persistent.assets/Listing_10_5.png)
+![清单 10.10 insertExtraInfo 方法的实现](Chapter10-Persistent.assets/Listing_10_10.png)
 
-The anyRegistrationFieldIsWrong method delegates checks to regular expressions, as in the following listing.
+请注意，更新查询可能会失败； 例如，如果另一个用户已经注册了具有相同标识符的设备。 在这种情况下，我们需要手动回滚并删除由身份验证提供程序创建的文档，否则数据库中的文档将不完整。 以下清单包含 *deleteIncompleteUser* 方法的实现。
 
-![](Chapter10-Persistent.assets/Listing_10_6.png)
+![清单 10.11 deleteIncompleteUser 方法的实现](Chapter10-Persistent.assets/Listing_10_11.png)
 
-The validDeviceId regular expression is the same as validUsername. Validating an email address (validEmail) is a more sophisticated regular expression. I chose to use one of the safe regular expressions from the Open Web Application Security Project (OWASP) for that purpose (www.owasp.org/index.php/OWASP_Validation_Regex).
+我们需要依靠异常消息中的技术代码来区分索引违规错误和其他类型的错误。 在第一种情况下，必须删除以前的数据，因为我们要对其进行处理和恢复； 在第二种情况下，这是另一个错误，我们无能为力，所以我们传播它。
 
-Now that we have validated the data, it is time to register the users.
+最后，下一个清单中显示的 *handleRegistrationError* 方法需要检查错误以使用适当的 HTTP 状态代码进行响应。
 
-### 10.2.4 Adding users in MongoDB
+![清单 10.12 handleRegistrationError 方法的实现](Chapter10-Persistent.assets/Listing_10_12.png)
 
-Inserting a new user in the database requires two steps:
+如果请求失败是因为用户名或设备标识符已被占用，或者由于某些技术错误而失败，请务必通知请求者。 在一种情况下，错误是请求者的错误，而在另一种情况下，服务端是罪魁祸首，请求者可以稍后再试。
 
-**1** We need to ask the helper to insert a new user, as it will also deal with other aspects like hashing passwords and having a salt value.
+### 10.2.5 验证用户
 
-**2** We need to update the user document to add extra fields that are not required by the authentication provider schema.
+根据用户名和密码对用户进行身份验证非常简单。 我们需要做的就是查询身份验证提供程序，它在成功时返回一个 *io.vertx.ext.auth.User* 实例。 在我们的例子中，我们对查询权限或角色不感兴趣—我们要做的就是检查身份验证是否成功。
 
-![](Chapter10-Persistent.assets/Figure_10_1.png)
+假设发送到 `/authenticate` 的 HTTP *POST* 请求具有带有 *username* 和 *password* 字段的 JSON 正文，我们可以按如下方式执行身份验证请求。
 
-Since this is a two-step data insert, and we cannot use any transaction management facility, we need to take care of the data integrity ourselves, as shown in figure 10.1.
+![清单 10.13 验证用户](Chapter10-Persistent.assets/Listing_10_13.png)
 
-Fortunately RxJava makes the error management declarative, so we won’t have to deal with nested conditionals of asynchronous operations, which would be complicated to do with callbacks or promises/futures.
+身份验证请求的结果是 *User*，如果失败则返回异常。 根据结果，我们以 200 或 401 状态码结束 HTTP 请求。
 
-The register method starts by extracting the JSON payload from the HTTP request, and then the username and password of the user to create, as follows.
+### 10.2.6 获取用户数据
 
-![](Chapter10-Persistent.assets/Listing_10_7.png)
+对 `/username` 的 HTTP *GET* 请求必须返回与该用户关联的数据（例如，`/foo`、`/bar` 等）。 为此，我们需要准备一个 MongoDB 查询并将数据作为 JSON 响应返回。
 
-Remember that register is called after validation, so we expect the JSON data to be good. We pass the authentication provider the username and password. There is also a form where rxCreateUser accepts two extra lists for defining roles and permissions. Then the helper populates the database with a new document.
+我们需要一个 MongoDB 的 `find` 查询来定位用户文档。 为此，我们需要两个 JSON 文档：
+  - 根据数据库文档的 *username* 字段的值查找的查询文档
+  - 用于指定应返回的字段的文档。
 
-Next we have to run a query to update the newly created document and append new entries. The MongoDB query is shown in the following listing and is represented as a JSON object.
+以下代码执行这样的查询。
 
-![](Chapter10-Persistent.assets/Listing_10_8.png)
+![清单 10.14 在 MongoDB 中获取用户数据](Chapter10-Persistent.assets/Listing_10_14.png)
 
-We must thus chain the rxInsertUser operation with a MongoDB update query, knowing that rxInsertUser returns a Single<String> where the value is the identifier of the new document. The following listing shows the complete user addition processing with RxJava.
+指定哪些字段应该是响应的一部分并明确说明这一点很重要。 在我们的例子中，我们不想透露文档标识符，所以我们在 *fields* 文档中将其设置为 `0`。 我们还明确列出了我们希望以 `1` 值返回的字段。 这也确保不会意外泄露其他字段，例如来自身份验证的密码和盐值。
 
-![](Chapter10-Persistent.assets/Listing_10_9.png)
+下一个清单显示了完成获取请求和 HTTP 响应的两种方法。
 
-The flatMapMaybe operator allows us to chain the two queries.
+![清单 10.15 完成用户获取请求](Chapter10-Persistent.assets/Listing_10_15.png)
 
-The insertExtraInfo method is shown in the next listing and returns a MaybeSource, because finding and updating a document may not hold a result if no matching document was found.
+正确处理错误情况并区分不存在的用户和技术错误非常重要。
 
-![](Chapter10-Persistent.assets/Listing_10_10.png)
+现在让我们看看更新用户的情况。
 
-Note that the update query can fail; for example, if another user has already registered a device with the same identifier. In this case, we need to manually roll back and remove the document that was created by the authentication provider, because otherwise we would have an incomplete document in the database. The following listing holds the implementation of the deleteIncompleteUser method.
+### 10.2.7 更新用户数据
 
-![](Chapter10-Persistent.assets/Listing_10_11.png)
+更新用户数据类似于获取数据，因为我们需要两个 JSON 文档：一个用于匹配文档，另一个用于指定需要更新的字段。 下面的清单显示了相应的代码。
 
-We need to rely on a technical code in an exception message to distinguish between index violation errors and other types of errors. In the first case, the previous data has to be removed because we want to deal with it and recover; in the second case, this is another error and we cannot do much, so we propagate it.
+![清单 10.16 使用 MongoDB 更新用户数据](Chapter10-Persistent.assets/Listing_10_16.png)
 
-Finally, the handleRegistrationError method shown in the next listing needs to inspect the error to respond with the appropriate HTTP status code.
+由于更新请求是来自 HTTP 请求的 JSON 文档，因此如果我们不小心，总是有可能受到外部攻击。 恶意用户可以在请求中制作包含更新密码或用户名的 JSON 文档，因此我们测试更新中是否存在每个允许的字段：*city*、*email* 和 *makePublic*。 然后，我们创建一个仅针对这些字段进行更新的 JSON 文档，而不是重用通过 HTTP 接收的 JSON 文档，并向 Vert.x MongoDB 客户端发出更新请求。
 
-![](Chapter10-Persistent.assets/Listing_10_12.png)
+我们现在已经介绍了 Vert.x 中 MongoDB 的典型用法，以及如何将其用于身份验证。 让我们继续讨论 PostgreSQL 和活动服务。
 
-It is important to notify the requester if the request failed because the username or device identifier has already been taken, or if it failed due to some technical error. In one case, the error is the fault of the requester, and in the other case, the service is the culprit, and the requester can try again later.
+## 10.3 使用 PostgreSQL 的活动服务
 
-### 10.2.5 Authenticating a user
+活动服务存储从计步器接收到的所有步数更新。 它是一种对新的步数更新事件（以存储数据）做出反应的服务，它可以被其他服务查询以获取给定设备在给定日期、月份或年份的步数。
 
-Authenticating a user against a username and password is very simple. All we need to do is query the authentication provider, which returns an io.vertx.ext.auth.User instance on success. In our case, we are not interested in querying permissions or roles—all we want to do is check that authentication succeeded.
+在摄取服务接受设备更新后，活动服务使用 PostgreSQL 存储活动数据。 PostgreSQL 非常适合此目的，因为 SQL 查询语言可以轻松计算聚合，例如给定月份设备的步数。
 
-Assuming that an HTTP POST request sent to /authenticate has a JSON body with username and password fields, we can perform the authentication request as follows.
+此服务分为两个独立的verticles：
+  - **EventsVerticle** 通过 Kafka 监听传入的活动更新，然后将数据存储在数据库中。
+  - **ActivityApiVerticle** 公开了一个用于查询活动数据的 HTTP API。
 
-![](Chapter10-Persistent.assets/Listing_10_13.png)
+我们本可以将所有代码放在一个 verticle 上，但是这种解耦使代码更易于管理，因为每个 verticle 都有明确的用途。 *EventsVerticle* 执行对数据库的写入，而 *ActivityApiVerticle* 执行读取操作。
 
-The result of an authentication request is a User, or an exception if it failed. Depending on the outcome, we end the HTTP request with a 200 or 401 status code.
+### 10.3.1 数据模型
 
-### 10.2.6 Fetching a user’s data
+数据模型并不是非常复杂，并且适合单个关系 *stepevent*。 创建 *stepevent* 表的 SQL 指令显示在以下清单中。
 
-HTTP GET requests to /username must return the data associated with that user (e.g.,
+![清单 10.17 创建 stepevent 表的 SQL 指令](Chapter10-Persistent.assets/Listing_10_17.png)
 
-/foo, /bar, etc.). To do that, we need to prepare a MongoDB query and return the data as a JSON response.
+主键根据设备标识符 (*device_id*) 和来自设备的同步计数器 (*device_sync*) 唯一标识活动更新。 记录事件的时间戳（*sync_timestamp*），最后存储步数（*steps_count*）。
 
-We need a MongoDB “find” query to locate a user document. To do that we need two JSON documents:
+>  **💡提示:** 如果您来自大量使用 *object-relational mappers* (ORM) 的背景，您可能会对前面的数据库模式感到惊讶，尤其是它使用复合主键而不是一些自动递增的数字这一事实。 您可能需要首先考虑关于正常形式的关系模型的正确设计，然后才能查看如何处理代码中的数据，无论是使用反映数据的集合 和/或 对象。 如果您对该主题感兴趣，维基百科对数据库规范化提供了很好的介绍：https://en.wikipedia.org/wiki/Database_normalization。
 
-◾     A query document to find based on the value of the username field of the database documents
+### 10.3.2 打开连接池
 
-◾     A document to specify the fields that should be returned. The following code performs such a query.
+*vertx-pg-client* 模块包含 *PgPool* 接口，该接口模拟到 PostgreSQL 服务器的连接池，其中每个连接都可以重复用于后续查询。 *PgPool* 是您在客户端中执行 SQL 查询的主要访问点。
 
-![](Chapter10-Persistent.assets/Listing_10_14.png)
+以下清单显示了如何创建 PostgreSQL 连接池。
 
-It is important to specify which fields should be part of the response, and to be explicit about it. In our case, we don’t want to reveal the document identifier, so we set it to 0 in the fields document. We also explicitly list the fields that we want to be returned with 1 values. This also ensures that other fields like the password and salt values from the authentication are not accidentally revealed.
+![清单 10.18 创建 PostgreSQL 连接池](Chapter10-Persistent.assets/Listing_10_18.png)
 
-The next listing shows the two methods that complete the fetch request and HTTP response.
+池创建需要 Vert.x 上下文、一组连接选项（例如主机、数据库和密码）以及池选项。 可以调整池选项以设置最大连接数以及等待队列的大小，但这里可以使用默认值。
 
-![](Chapter10-Persistent.assets/Listing_10_15.png)
+然后使用 *pool* 对象对数据库执行查询，如下所示。
 
-It is important to properly deal with the error cases and to distinguish between a nonexisting user and a technical error.
+### 10.3.3 设备更新事件的生命周期
 
-Let’s now see the case of updating a user.
+*EventsVerticle* 负责监听 `incoming.steps` 主题的 Kafka 记录，其中每条记录都是通过摄取服务从设备接收到的更新。 对于每条记录，*EventsVerticle* 必须执行以下操作：
 
-### 10.2.7 Updating a user’s data
+  - 将记录插入 PostgreSQL 数据库。
+  - 使用记录设备的每日步数生成更新的记录。
+  - 将其作为新的 Kafka 记录发布到Kafka的 *daily.step.updates*  主题。 如**图 10.2** 所示。
 
-Updating a user’s data is similar to fetching data, as we need two JSON documents: one to match documents, and one to specify what fields need to be updated. The following listing shows the corresponding code.
+![图 10.2 记录设备更新和产生更新事件的步骤](Chapter10-Persistent.assets/Figure_10_2.png)
 
-![](Chapter10-Persistent.assets/Listing_10_16.png)
+这些步骤由以下清单中定义的 RxJava 管道建模。
 
-Since the update request is a JSON document coming from an HTTP request, there is always the possibility of an external attack if we are not careful. A malicious user could craft a JSON document in the request with updates to the password or username, so we test for the presence of each allowed field in updates: city, email, and makePublic. We then create a JSON document with updates just for these fields, rather than reusing the JSON document received over HTTP, and we make an update request to the Vert.x MongoDB client.
+![清单 10.19 在 EventsVerticle 中处理更新的 RxJava 管道](Chapter10-Persistent.assets/Listing_10_19.png)
 
-We have now covered the typical use of MongoDB in Vert.x, as well as how to use it for authentication purposes. Let’s move on to PostgreSQL and the activity service.
+这个 RxJava 管道让人想起我们之前在消息传递和事件堆栈中看到的那些，因为我们组合了三个异步操作。 此管道从 Kafka 读取数据，插入数据库记录 (*insertRecord*)，生成要写入 Kafka 的查询 (*generateActivityUpdate*)，并提交它 (*commitKafkaConsumerOffset*)。
 
-## 10.3 Activity service with PostgreSQL
+### 10.3.4 插入新记录
 
-The activity service stores all the step updates as they are received from pedometers. It is a service that reacts to new step update events (to store data), and it can be queried by other services to get step counts for a given device on a given day, month, or year.
+接下来显示用于插入记录的 SQL 查询。
 
-The activity service uses PostgreSQL to store activity data after device updates have been accepted by the ingestion service. PostgreSQL is well suited for this purpose because the SQL query language makes it easy to compute aggregates, such as step counts for a device on a given month.
+![清单 10.20 插入步骤事件的 SQL 查询](Chapter10-Persistent.assets/Listing_10_20.png)
 
-The service is split into two independent verticles:
+>  **💡提示:** Vert.x 没有规定任何对象关系映射工具。 使用纯 SQL 是一个不错的选择，但如果您想从数据库的特殊性中抽象出代码并使用 API 来构建查询而不是使用字符串，我建议您查看 jOOQ (www.jooq.org)。 您甚至可以在社区中找到 *Vert.x/jOOQ(https://github.com/jklingsporn/vertx-jooq)* 集成模块。
 
-◾     EventsVerticle listens for incoming activity updates over Kafka and then stores data in the database.
+我们使用带有静态方法的类来定义 SQL 查询，因为它比我们代码中的纯字符串常量更方便。 该查询将用作准备好的语句，其中以 `$` 符号为前缀的值将从值元组中获取。 由于我们使用预准备语句，因此这些值不会受到 SQL 注入攻击。
 
-◾     ActivityApiVerticle exposes an HTTP API for querying activity data.
+为每个新的 Kafka 记录调用 *insertRecord* 方法，方法主体显示在以下清单中。
 
-We could have put all the code on a single verticle, but this decoupling renders the code more manageable, as each verticle has a well-defined purpose. EventsVerticle performs writes to the database, whereas ActivityApiVerticle performs the read operations.
+![清单 10.21 insertRecord 方法的实现](Chapter10-Persistent.assets/Listing_10_21.png)
 
-### 10.3.1 Data model
+我们首先从记录中提取 JSON 正文，然后准备一个值元组作为参数传递给**清单 10.20** 中的 SQL 查询。 查询的结果是一个行集，但由于这不是一个 *SELECT* 查询，所以我们不关心结果。 相反，我们只是简单地用原始 Kafka 记录值重新映射结果，因此 *generateActivityUpdate* 方法可以重用它。
 
-The data model is not terribly complex and fits in a single relation stepevent. The SQL instructions for creating the stepevent table are shown in the following listing.
+*onErrorReturn* 运算符允许我们优雅地处理重复插入。 有可能在服务重启后，我们最终会重播一些我们已经处理过的 Kafka 事件，因此 INSERT 查询将失败，而不是创建具有重复主键的条目。
 
-![](Chapter10-Persistent.assets/Listing_10_17.png)
+以下清单中的 *duplicateKeyInsert* 方法显示了我们如何区分重复键错误和另一个技术错误。
 
-The primary key uniquely identifies an activity update based on a device identifier (device_id) and a synchronization counter from the device (device_sync). The timestamp of the event is recorded (sync_timestamp), and finally the number of steps is stored (steps_count).
+![清单 10.22 检测重复键错误](Chapter10-Persistent.assets/Listing_10_22.png)
 
->  **TIP** If you come from a background with a heavy use of *object-relational mappers* (ORMs), you may be surprised by the preceding database schema, and especially the fact that it uses a composite primary key rather than some auto-incremented number. You may want to first consider the proper design of your relational model with respect to normal forms, and only then see how to handle data in your code, be it with collections and/or objects that reflect the data. If you’re interested in the topic, Wikipedia provides a good introduction to database normalization: https://en.wikipedia.org/wiki/Database_normalization.
+我们再次必须在异常消息中搜索技术错误代码，如果它对应于 PostgreSQL 重复键错误，则 *onErrorReturn* 将原始 Kafka 记录放入管道中，而不是让错误传播。
 
-### 10.3.2 Opening a connection pool
+### 10.3.5 生成设备的每日活动更新
 
-The vertx-pg-client module contains the PgPool interface that models a pool of connections to a PostgreSQL server, where each connection can be reused for subsequent queries. PgPool is your main access point in the client for performing SQL queries.
+插入记录后，RxJava 处理管道的下一步是查询数据库以了解当天执行了多少步。 然后用于准备新的 Kafka 记录并将其推送到 `daily.step.updates` Kafka主题。
 
-The following listing shows how to create a PostgreSQL connection pool.
+与该操作对应的 SQL 查询由以下清单中的 *stepsCountForToday* 方法指定。
 
-![](Chapter10-Persistent.assets/Listing_10_18.png)
+![清单 10.23 获取设备当天步数的 SQL 查询](Chapter10-Persistent.assets/Listing_10_23.png)
 
-The pool creation requires a Vert.x context, a set of connection options such as the host, database, and password, and pool options. The pool options can be tuned to set the maximum number of connections as well as the size of the waiting queue, but default values are fine here.
+此请求计算给定设备标识符在当天采取的步骤的总和（或 0）。
 
-The *pool* object is then used to perform queries to the database, as you will see next.
+下一个清单显示了 *generateActivityUpdate* 方法的实现，获取由 *insertRecord* 方法转发的原始 Kafka 记录。
 
-### 10.3.3 Life of a device update event
+![清单 10.24 generateActivityUpdate 方法的实现](Chapter10-Persistent.assets/Listing_10_24.png)
 
-The EventsVerticle is in charge of listening to Kafka records on the incoming.steps topic, where each record is an update received from a device through the ingestion service. For each record, EventsVerticle must do the following:
+此代码显示了我们如何在 *SELECT* 查询之后操作行。 查询的结果是*RowSet*，在此由第一个*map* 运算符中的 *rs* 参数具体化，并且可以逐行迭代。 由于查询返回单行，我们可以通过在 *RowSet* 迭代器上调用 *next* 直接访问第一行也是唯一一行。 然后，我们按类型和索引访问行元素以构建一个 *JsonObject*，它创建发送到 `daily.step.updates` 主题的 Kafka 记录。
 
-◾     Insert the record into the PostgreSQL database.
+### 10.3.6 活动 API 查询
 
-◾     Generate an updated record with the daily step count for the device of the record.
+*ActivityApiVerticle* 类公开了活动服务的 HTTP API - 所有路由都指向 SQL 查询。 我不会展示所有这些。 我们将重点关注设备的每月步骤，通过对 `/:deviceId/:year/:month` 的 HTTP *GET* 请求进行处理。 SQL 查询如下所示。
 
-◾     Publish it as a new Kafka record to the daily.step.updates Kafka topic. This is illustrated in figure 10.2.
+![清单 10.25 月步数 SQL 查询](Chapter10-Persistent.assets/Listing_10_25.png)
 
-![](Chapter10-Persistent.assets/Figure_10_2.png)
+*stepsOnMonth* 方法显示在下一个清单中。 它根据年月路径参数执行 SQL 查询。
 
-These steps are modeled by the RxJava pipeline defined in the following listing.
+![清单 10.26 处理每月步骤请求](Chapter10-Persistent.assets/Listing_10_26.png)
 
-![](Chapter10-Persistent.assets/Listing_10_19.png)
+查询结果又是一个*RowSet*，我们从SQL 查询中知道只能返回一行，所以我们使用 *map* 操作符来提取它。 *sendCount* 方法将数据作为 JSON 文档发送，而 *handleError* 方法会产生 HTTP 500 错误。 当年或月 URL 参数不是数字或没有生成有效日期时，*sendBadRequest* 会生成 HTTP 400 响应，让请求知道错误。
 
-This RxJava pipeline is reminiscent of those we saw earlier in the messaging and eventing stack, as we compose three asynchronous operations. This pipeline reads from Kafka, inserts database records (insertRecord), produces a query to write to Kafka (generateActivityUpdate), and commits it (commitKafkaConsumerOffset).
+现在是时候转向集成测试策略了。 当我们必须预填充 PostgreSQL 数据库时，我还将向您展示一些其他数据客户端方法，例如 SQL 批处理查询。
 
-### 10.3.4 Inserting a new record
+## 10.4 集成测试
 
-The SQL query to insert a record is shown next.
+测试用户配置文件服务涉及向相应 API 发出 HTTP 请求。 活动服务有两个方面：一个涉及 HTTP API，另一个涉及制作 Kafka 事件并观察持久状态和生成事件方面的影响。
 
-![](Chapter10-Persistent.assets/Listing_10_20.png)
+### 10.4.1 测试用户配置文件服务
 
->  **TIP** Vert.x does not prescribe any object-relational mapping tool. Using plain SQL is a great option, but if you want to abstract your code from the particularities of databases and use an API to build your queries rather than using strings, I recommend looking at jOOQ (www.jooq.org/). You can even find a Vert.x/jOOQ integration module in the community.
+用户配置文件测试依赖于发出影响服务状态和数据库的 HTTP 请求（例如，创建用户），然后发出进一步的 HTTP 请求以执行一些断言，如**图 10.3** 所示。
 
-We use a class with static methods to define SQL queries, as it is more convenient than plain string constants in our code. The query will be used as a prepared statement, where values prefixed by a $ symbol will be taken from a tuple of values. Since we use a prepared statement, these values are safe from SQL injection attacks.
+![图 10.3 测试用户配置文件服务](Chapter10-Persistent.assets/Figure_10_3.png)
 
-The insertRecord method is called for each new Kafka record, and the method body is shown in the following listing.
+集成测试再次依赖于 Testcontainers，因为我们需要运行 MongoDB 实例。 一旦我们让容器运行，我们需要在运行任何测试之前准备 MongoDB 数据库处于干净状态。 这对于确保测试不受先前测试执行留下的数据的影响非常重要。
 
-![](Chapter10-Persistent.assets/Listing_10_21.png)
+*IntegrationTest* 类的 *setup* 方法执行测试准备。
 
-We first extract the JSON body from the record, and then prepare a tuple of values to pass as parameters to the SQL query in listing 10.20. The result of the query is a row set, but since this is not a SELECT query, we do not care about the result. Instead, we simply remap the result with the original Kafka record value, so the generateActivityUpdate method can reuse it.
+![清单 10.27 用户配置文件集成测试设置](Chapter10-Persistent.assets/Listing_10_27.png)
 
-The onErrorReturn operator allows us to handle duplicate inserts gracefully. It is possible that after a service restart we’ll end up replaying some Kafka events that we had already processed, so the INSERT queries will fail instead of creating entries with duplicate primary keys.
+我们首先连接到 MongoDB 数据库，然后确保我们有两个索引用于 *username* 和 *deviceId* 字段。 然后，我们从 *profiles* 数据库中删除所有现有文档（参见清单 10.28），并在成功完成初始化阶段之前部署 *UserProfileApiVerticle* verticle 的实例。
 
-The duplicateKeyInsert method in the following listing shows how we can distinguish between a duplicate key error and another technical error.
+![清单 10.28 删除 MongoDB 数据库中的所有用户](Chapter10-Persistent.assets/Listing_10_28.png)
 
-![](Chapter10-Persistent.assets/Listing_10_22.png)
+*IntegrationTest* 类提供了预期会成功的操作以及预期会失败的操作的不同测试用例。 *RestAssured* 用于编写 HTTP 请求的测试规范，如下面的清单所示。
 
-We again have to search for a technical error code in the exception message, and if it corresponds to a PostgreSQL duplicate key error, then onErrorReturn puts the original Kafka record in the pipeline rather than letting an error be propagated.
+![清单 10.29 验证丢失用户的测试](Chapter10-Persistent.assets/Listing_10_29.png)
 
-### 10.3.5 Generating a device’s daily activity update
+*authenticateMissingUser* 方法检查是否针对无效凭据进行身份验证会导致 HTTP 401 状态代码。
 
-The next step in the RxJava processing pipeline after a record has been inserted is to query the database to find out how many steps have been taken on the current day. This is then used to prepare a new Kafka record and push it to the daily.step.updates Kafka topic.
+另一个例子是下面的测试，我们检查当我们尝试注册用户两次时会发生什么。
 
-The SQL query corresponding to that operation is specified by the stepsCountForToday method in the following listing.
+![Listing 10.30 Test for registering a user twice  ](Chapter10-Persistent.assets/Listing_10_30.png)
 
-![](Chapter10-Persistent.assets/Listing_10_23.png)
+我们还可以查看数据库并检查每个操作后存储的数据。 由于我们需要涵盖 HTTP API 的所有功能案例，因此在集成测试中只关注 HTTP API 会更直接。 但是，在某些情况下，数据库之上的 API 可能不会让您接触到对存储数据的一些重要影响，在这些情况下，您需要连接到数据库以进行一些进一步的断言。
 
-This request computes the sum (or 0) of the steps taken on the current day for a given device identifier.
+### 10.4.2 测试活动服务 API
 
-The next listing shows the implementation of the generateActivityUpdate method, picking up the original Kafka record forwarded by the insertRecord method.
+测试活动服务 API 与测试用户配置文件服务非常相似，只是我们使用 PostgreSQL 而不是 MongoDB。
 
-![](Chapter10-Persistent.assets/Listing_10_24.png)
+我们首先需要确保数据模式的定义如**清单 10.17** 所示。 为此，`init/postgres/setup.sql` 中的 SQL 脚本会在 PostgreSQL 容器启动时自动运行。 这是因为容器镜像指定在 `/docker-entrypoint-initdb.d/` 中找到的任何 SQL 脚本将在启动时运行，并且我们使用的 Docker Compose 文件将 `init/postgres` 挂载到 `/docker- entrypoint-initdb.d/`，因此容器中的 SQL 文件可用。
 
-This code shows how we can manipulate rows following a SELECT query. The result of a query is RowSet, materialized here by the rs argument in the first map operator, and which can be iterated row by row. Since the query returns a single row, we can directly access the first and only row by calling next on the RowSet iterator. We then access the row elements by type and index to build a JsonObject that creates the Kafka record sent to the daily.step.updates topic.
+一旦数据库已经准备好一些预定义的数据，我们就会发出 HTTP 请求来执行断言，如**图 10.4** 所示。
 
-### 10.3.6 Activity API queries
+![图 10.4 测试活动服务 API](Chapter10-Persistent.assets/Figure_10_4.png)
 
-The ActivityApiVerticle class exposes the HTTP API for the activity service—all routes lead to SQL queries. I won’t show all of them. We’ll focus on the monthly steps for a device, handled through HTTP GET requests to /:deviceId/:year/:month. The SQL query is shown next.
+我们再次依靠 Testcontainers 启动一个 PostgreSQL 服务器，然后我们依靠测试设置方法来准备数据，如下所示。
 
-![](Chapter10-Persistent.assets/Listing_10_25.png)
+![清单 10.31 准备活动服务API测试](Chapter10-Persistent.assets/Listing_10_31.png)
 
-The stepsOnMonth method is shown in the next listing. It performs the SQL query based on the year and month path parameters.
+在这里，我们需要一个包含我们控制的数据集的数据库，其中包含设备 *123*、*456*、*abc* 和 *def* 在不同时间点的活动。 例如，设备*123*在*2019/05/21 11:00*记录了320步，这是该设备第4次与后端成功同步。 然后，我们可以对 HTTP API 执行检查，如下面的清单所示，我们在其中检查设备 *123* 在 *2019 年 5 月* 的步数。
 
-![](Chapter10-Persistent.assets/Listing_10_26.png)
+![清单 10.32 在给定月份检查设备123的步数](Chapter10-Persistent.assets/Listing_10_32.png)
 
-The query result is again a RowSet, and we know from the SQL query that only one row can be returned, so we use the map operator to extract it. The sendCount method sends the data as a JSON document, while the handleError method produces an HTTP 500 error. When a year or month URL parameter is not a number or does not result in a valid date, sendBadRequest produces an HTTP 400 response to let the request know of the mistake.
+活动 HTTP API 是服务的只读部分，所以现在让我们看看服务的另一部分。
 
-It is now time to move on to integration testing strategies. I’ll also show you some other data client methods, such as SQL batch queries, when we have to prepopulate a PostgreSQL database.
+### 10.4.3 测试活动服务的事件处理
 
-## 10.4 Integration tests
+测试 *EventsVerticle* 的 Kafka 事件处理部分的技术与我们在上一章中所做的非常相似：我们将发送一些 Kafka 记录，然后观察服务产生的 Kafka 记录。
 
-Testing the user profile service involves issuing HTTP requests to the corresponding API. The activity service has two facets: one that involves the HTTP API, and one that involves crafting Kafka events and observing the effects in terms of persisted state and produced events.
+通过为给定设备发送多个步骤更新，我们应该观察到该服务生成的更新会累积当天的步骤。 由于该服务既消费又产生反映数据库当前状态的 Kakfa 记录，我们不需要执行 SQL 查询——观察正在产生正确的 Kafka 记录就足够了。 **图 10.5** 概述了测试是如何完成的。
 
-### 10.4.1 Testing the user profile service
+![图 10.5 测试活动服务事件处理](Chapter10-Persistent.assets/Figure_10_5.png)
 
-The user profile tests rely on issuing HTTP requests that impact the service state and the database (e.g., creating a user) and then issuing further HTTP requests to perform some assertions, as illustrated in figure 10.3.
+集成测试类 (*EventProcessingTest*) 再次使用 TestContainers 来启动所需的服务：PostgreSQL、Apache Kafka 和 Apache ZooKeeper。 在运行任何测试之前，我们必须使用以下清单中的测试准备代码从干净状态开始。
 
-![](Chapter10-Persistent.assets/Figure_10_3.png)
+![清单 10.33 事件处理集成测试的准备代码](Chapter10-Persistent.assets/Listing_10_33.png)
 
-The integration tests rely again on Testcontainers, as we need to have a MongoDB instance running. Once we have the container running, we need to prepare the MongoDB database to be in a clean state before we run any tests. This is important to ensure that a test is not affected by data left by a previous test’s execution.
+我们需要确保 PostgreSQL 数据库是空的，并且我们用来接收和发送事件的 Kafka 主题被删除。 然后我们可以专注于测试方法，我们将为设备 *123* 发送2个步骤更新。
 
-The setup method of the IntegrationTest class performs the test preparation.
+在此之前，我们必须先订阅 *daily.step.updates* Kafka 主题，其中 *EventsVerticle* 类将发送 Kafka 记录。 以下清单显示了测试用例的第一部分。
 
-![](Chapter10-Persistent.assets/Listing_10_27.png)
+![清单 10.34 事件 Verticle 测试用例的第1部分](Chapter10-Persistent.assets/Listing_10_34.png)
 
-We first connect to the MongoDB database and then ensure we have two indexes for the username and deviceId fields. We then remove all existing documents from the profiles database (see listing 10.28), and deploy an instance of the UserProfileApiVerticle verticle before successfully completing the initialization phase.
+由于我们发送了2个更新，我们跳过发出的记录，只对第2个执行断言，因为它应该反映2个更新的步骤总和。 前面的代码正在等待事件的产生，所以我们现在需要部署 *EventsVerticle* 并发送两个更新，如下所示。
 
-![](Chapter10-Persistent.assets/Listing_10_28.png)
+![清单 10.34 事件 Verticle 测试用例的第2部分](Chapter10-Persistent.assets/Listing_10_35.png)
 
-The IntegrationTest class provides different test cases of operations that are expected to succeed, as well as operations that are expected to fail. RestAssured is used to write the test specifications of the HTTP requests, as in the following listing.
+当 *EventsVerticle* 正确地向 *daily.step.updates* Kafka 主题发送正确的更新时，测试完成。 我们可以再次注意到 RxJava 如何允许我们以声明方式组合异步操作并确保清楚地识别错误处理。 我们这里基本上有两个 RxJava 管道，任何错误都会导致测试上下文失败。
 
-![](Chapter10-Persistent.assets/Listing_10_29.png)
+>  **🏷注意:** 如果第1次更新在午夜之前发送，第2次在午夜之后发送，那么这个测试有一个很小的漏洞窗口会失败。 在这种情况下，第2个事件将不是两个事件中步骤的总和。 这不太可能发生，因为这两个事件将相隔几毫秒发出，但它仍然可能发生。
 
-The authenticateMissingUser method checks that authenticating against invalid credentials results in an HTTP 401 status code.
+说到事件流，下一章将重点介绍 Vert.x 的高级事件处理服务。
 
-Another example is the following test, where we check what happens when we attempt to register a user twice.
-
-![](Chapter10-Persistent.assets/Listing_10_30.png)
-
-We could also peek into the database and check the data that is being stored after each action. Since we need to cover all functional cases of the HTTP API, it is more straightforward to focus on just the HTTP API in the integration tests. However, there are cases where an API on top of a database may not expose you to some important effects on the stored data, and in these cases, you will need to connect to the database to make some further assertions.
-
-### 10.4.2 Testing the activity service API
-
-Testing the activity service API is quite similar to testing the user profile service, except that we use PostgreSQL instead of MongoDB.
-
-We first need to ensure that the data schema is defined as in listing 10.17. To do that, the SQL script in init/postgres/setup.sql is run automatically when the PostgreSQL container starts. This works because the container image specifies that any SQL script found in /docker-entrypoint-initdb.d/ will be run when it starts, and the Docker Compose file that we use mounts init/postgres to /docker-entrypoint-initdb.d/, so the SQL file is available in the container.
-
-Once the database has been prepared with some predefined data, we issue HTTP requests to perform assertions, as shown in figure 10.4.
-
-![](Chapter10-Persistent.assets/Figure_10_4.png)
-
-We again rely on Testcontainers to start a PostgreSQL server, and then we rely on the test setup method to prepare the data as follows.
-
-![](Chapter10-Persistent.assets/Listing_10_31.png)
-
-Here we want a database with a data set that we control, with activities for devices 123, 456, abc, and def at various points in time. For instance, device 123 recorded 320 steps on 2019/05/21 at 11:00, and that was the fourth time the device made a successful synchronization with the backend. We can then perform checks against the HTTP API, as in the following listing, where we check the number of steps for device 123 in May 2019.
-
-![](Chapter10-Persistent.assets/Listing_10_32.png)
-
-The activity HTTP API is the read-only part of the service, so let’s now look at the other part of the service.
-
-### 10.4.3 Testing the activity service’s event handling
-
-The technique for testing the Kafka event processing part of EventsVerticle is very similar to what we did in the previous chapter: we’ll send some Kafka records and then observe what Kafka records the service produces.
-
-By sending multiple step updates for a given device, we should observe that the service produces updates that accumulate the steps on the current day. Since the service both consumes and produces Kakfa records that reflect the current state of the database, we won’t need to perform SQL queries—observing that correct Kafka records are being produced is sufficient. Figure 10.5 provides an overview of how the testing is done.
-
-![](Chapter10-Persistent.assets/Figure_10_5.png)
-
-The integration test class (EventProcessingTest) again uses TestContainers to start the required services: PostgreSQL, Apache Kafka, and Apache ZooKeeper. Before any test is run, we must start from a clean state by using the test preparation code in the following listing.
-
-![](Chapter10-Persistent.assets/Listing_10_33.png)
-
-We need to ensure that the PostgreSQL database is empty, and that the Kafka topics we use to receive and send events are deleted. We can then focus on the test method, where we will send two step updates for device 123.
-
-Before that, we must first subscribe to the daily.step.updates Kafka topic, where the EventsVerticle class will send Kafka records. The following listing shows the first part of the test case.
-
-![](Chapter10-Persistent.assets/Listing_10_34.png)
-
-Since we send two updates, we skip the emitted record and only perform assertions on the second one, as it should reflect the sum of the steps from the two updates. The preceding code is waiting for events to be produced, so we now need to deploy EventsVerticle and send the two updates as follows.
-
-![](Chapter10-Persistent.assets/Listing_10_35.png)
-
-The test completes as EventsVerticle properly sends correct updates to the daily.step.updates Kafka topic. We can again note how RxJava allows us to compose asynchronous operations in a declarative fashion and ensure the error processing is clearly identified. We have essentially two RxJava pipelines here, and any error causes the test context to fail.
-
->  **NOTE** There is a tiny vulnerability window for this test to fail if the first update is sent before midnight and the second right after midnight. In that case, the second event will not be a sum of the steps in the two events. This is very unlikely to happen, since the two events will be emitted a few milliseconds apart, but still, it could happen.
-
-Speaking of event streams, the next chapter will focus on advanced event processing services with Vert.x.
-
-## Summary
-
-◾     Vert.x applications can easily be deployed to Kubernetes clusters with no need for Kubernetes-specific modules.
-
-◾     The Vert.x distributed event bus works in Kubernetes by configuring the cluster manager discovery mode.
-
-◾     It is possible to have a fast, local Kubernetes development experience using tools like Minikube, Skaffold, and Jib.
-
-◾     Exposing health checks and metrics is a good practice for operating services in a cluster.
+## 总结
+  - Vert.x 应用程序可以轻松部署到 Kubernetes 集群，而无需 Kubernetes 特定模块。
+  - Vert.x 分布式事件总线通过配置集群管理器发现模式在 Kubernetes 中工作。
+  - 使用 Minikube、Skaffold 和 Jib 等工具可以获得快速的本地 Kubernetes 开发体验。
+  - 公开运行状况检查和指标是在集群中操作服务的好习惯。

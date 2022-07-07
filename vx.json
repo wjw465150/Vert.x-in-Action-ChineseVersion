@@ -50,9 +50,32 @@
             "signature": "177748516623",
             "tags": [
             ]
+        },
+        {
+            "attachment_folder": "",
+            "created_time": "2022-07-06T07:06:02Z",
+            "id": "5422",
+            "modified_time": "2022-07-07T06:53:51Z",
+            "name": "Chapter10-Persistent.md",
+            "signature": "177750750298",
+            "tags": [
+            ]
+        },
+        {
+            "attachment_folder": "",
+            "created_time": "2022-07-07T01:51:51Z",
+            "id": "5423",
+            "modified_time": "2022-07-07T03:54:37Z",
+            "name": "Chapter1-Fundamentals.md",
+            "signature": "177750817847",
+            "tags": [
+            ]
         }
     ],
     "folders": [
+        {
+            "name": "Chapter3-EventBus.assets"
+        }
     ],
     "id": "5412",
     "modified_time": "2022-05-26T04:34:54Z",

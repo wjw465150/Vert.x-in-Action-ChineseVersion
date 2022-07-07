@@ -1,5 +1,7 @@
 # 第六章: 超越事件总线
 
+> 翻译: 白石(https://github.com/wjw465150/Vert.x-in-Action-ChineseVersion)
+
 **本章涵盖了**
 
   - 如何在事件总线上公开服务

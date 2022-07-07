@@ -1,5 +1,7 @@
 # 第九章: Messaging and event streaming with Vert.x
 
+> 翻译: 白石(https://github.com/wjw465150/Vert.x-in-Action-ChineseVersion)
+
 **本章涵盖**
 
   - 消息传递与AMQP

@@ -1,5 +1,7 @@
 # 第八章: The Web Stack
 
+> 翻译: 白石(https://github.com/wjw465150/Vert.x-in-Action-ChineseVersion)
+
 **本章涵盖**
   - 边缘服务和公共 API 的构建
   - Vert.x 网络客户端

@@ -1,5 +1,7 @@
 # 第七章: 设计一个反应式应用程序
 
+> 翻译: 白石(https://github.com/wjw465150/Vert.x-in-Action-ChineseVersion)
+
 **本章涵盖**
 
   - 什么是反应式应用

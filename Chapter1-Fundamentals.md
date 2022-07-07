@@ -1,6 +1,6 @@
 # 第一章: Vert.x 异步编程的基础知识
 
-> 翻译: 白石(https://github.com/wjw465150/Vert.x-Core-Manual)
+> 翻译: 白石(https://github.com/wjw465150/Vert.x-in-Action-ChineseVersion)
 
 构建反应式系统的第一步是采用异步编程。基于阻塞I/O的传统编程模型的可伸缩性不如使用非阻塞I/O的模型。用更少的资源服务更多的请求是非常有吸引力的，那么问题在哪里呢?这里确实存在一个小问题:如果您从未接触过异步编程，那么它是一种重要的范式转换!
 
@@ -42,7 +42,7 @@
 
 使用 Micrometer 等库进行监控会公开健康状态、指标和日志，以便外部编排工具可以保持适当的服务质量，可能通过启动新服务实例或在失败时终止现有服务实例。
 
-![](Chapter1-Fundamentals.assets/Figure_1_1.png)
+![图1.1网络应用/服务](Chapter1-Fundamentals.assets/Figure_1_1.png)
 
 在本书的后面部分，您将看到典型服务的示例，例如 API 端点、流处理器和边缘服务。 当然，前面的列表并不详尽，但关键是服务很少独立存在，因为它们需要通过网络与其他服务通信才能运行。
 
@@ -66,17 +66,17 @@
 
 服务器可以使用本书完整示例项目中的 Gradle 运行任务（终端中的`./gradlew run -PmainClass=chapter1.snippets.SynchronousEcho`）运行。 通过使用 `netcat` 命令行工具，我们可以发送和接收文本。
 
-![](Chapter1-Fundamentals.assets/Listing_1_1.png)
+![清单 1.1 netcat 会话的客户端输出](Chapter1-Fundamentals.assets/Listing_1_1.png)
 
 > **💡提示:** 您可能需要在操作系统上安装 netcat（或 nc）。
 
 在服务器端，我们可以看到以下输出。
 
-![](Chapter1-Fundamentals.assets/Listing_1_2.png)
+![清单 1.2 服务器端跟踪](Chapter1-Fundamentals.assets/Listing_1_2.png)
 
 以下清单中的代码提供了 TCP 服务器实现。 它是提供同步 I/O API 的`java.io`包的经典用法。
 
-![](Chapter1-Fundamentals.assets/Listing_1_3.png)
+![清单 1.3 同步回显 TCP 协议](Chapter1-Fundamentals.assets/Listing_1_3.png)
 
 ```java
 package chapter1.snippets;
@@ -138,13 +138,13 @@ public class SynchronousEcho {
 
 现代操作系统可以正确处理几千个并发线程。 并非每个联网服务都会面临如此多并发请求的负载，
 
-![image-20220527153804390](Chapter1-Fundamentals.assets/Figure_1_2.png)
+![图 1.2 线程和阻塞 I/O 操作](Chapter1-Fundamentals.assets/Figure_1_2.png)
 
 但是当我们谈论数以万计的并发连接时，这个模型很快就显示出它的局限性。
 
 同样重要的是要记住，我们通常需要比传入网络连接更多的线程。 举一个具体的例子，假设我们有一个 HTTP 服务，它为给定的产品提供最优惠的价格，它通过向其他四个 HTTP 服务请求价格来做到这一点，如**图 1.3** 所示。 这种服务通常
 
-![image-20220527154029412](Chapter1-Fundamentals.assets/Figure_1_3.png)
+![图 1.3 边缘服务中的请求处理](Chapter1-Fundamentals.assets/Figure_1_3.png)
 
 称为*边缘服务*或*API网关*。 按顺序请求每个服务然后选择最低价格会使我们的服务变得非常慢，因为每个请求都会增加我们自己服务的延迟。 有效的方法是从我们的服务启动四个并发请求，然后等待并收集它们的响应。 这意味着再启动四个线程； 如果我们有 1,000 个并发网络请求，我们可能会使用多达 5,000 个线程，在最糟糕的情况下，所有请求都需要同时处理，并且我们不使用线程池或维护来自边缘服务的持久连接 请求的服务。
 
@@ -158,19 +158,19 @@ public class SynchronousEcho {
 
 Java 长期以来一直有 `java.nio` (Java NIO) 包，它通过文件和网络提供非阻塞 I/O API。 回到我们之前回显传入数据的 TCP 服务示例，**清单 1.4** 到 **清单1.7** 显示了使用 Java 非阻塞 I/O 的参考实现。
 
-![image-20220527154418444](Chapter1-Fundamentals.assets/Listing_1_4.png)
+![清单 1.4 echo 服务的异步变体：主循环](Chapter1-Fundamentals.assets/Listing_1_4.png)
 
 **清单 1.4** 显示了服务器套接字通道准备代码。 它打开服务器套接字通道并使其成为非阻塞的，然后注册一个 NIO 键选择器来处理事件。 主循环遍历已准备好处理事件的选择器键，并根据事件类型（新连接、数据已到达或可以再次发送数据）将它们分派给专门的方法。
 
-![image-20220527154620560](Chapter1-Fundamentals.assets/Listing_1_5.png)
+![清单 1.5 echo 服务的异步变体：接受连接](Chapter1-Fundamentals.assets/Listing_1_5.png)
 
 **清单 1.5** 展示了如何处理新的 TCP 连接。 对应于新连接的套接字通道被配置为非阻塞，然后在哈希映射中被跟踪以供进一步参考，其中它与某个*上下文对象*相关联。 上下文取决于应用程序和协议。 在我们的例子中，我们跟踪当前行以及连接是否正在关闭，并且我们维护一个连接特定的 NIO 缓冲区用于读取和写入数据。
 
-![image-20220527154718266](Chapter1-Fundamentals.assets/Listing_1_6.png)
+![清单 1.6 回显服务的异步变体：回显数据](Chapter1-Fundamentals.assets/Listing_1_6.png)
 
 **清单 1.6** 包含 `echo` 方法的代码。 处理非常简单：我们从客户端套接字读取数据，然后尝试将其写回。 如果写操作只是部分，我们停止进一步的读取，声明有兴趣知道套接字通道何时再次可写，然后确保写入所有数据。
 
-![image-20220527154921138](Chapter1-Fundamentals.assets/Listing_1_7.png)
+![清单 1.7 echo 服务的异步变体：继续和关闭](Chapter1-Fundamentals.assets/Listing_1_7.png)
 
 最后，**清单 1.7** 显示了关闭 TCP 连接和完成写入缓冲区的方法。 当所有数据都写入 `continueEcho` 时，我们再次注册读取数据的兴趣。
 
@@ -184,7 +184,7 @@ Java 长期以来一直有 `java.nio` (Java NIO) 包，它通过文件和网络�
 
 用于处理异步事件的流行线程模型是事件循环。 不像我们在前面的 Java NIO 示例中所做的那样轮询可能已经到达的事件，而是将事件推送到一个*事件循环*中。
 
-![image-20220527155141864](Chapter1-Fundamentals.assets/Figure_1_4.png)
+![图 1.4 使用事件循环处理事件](Chapter1-Fundamentals.assets/Figure_1_4.png)
 
 正如您在**图 1.4** 中看到的，事件在到达时会排队。 它们可以是 I/O 事件，例如准备好使用的数据或已完全写入套接字的缓冲区。 它们也可以是任何 *其它* 事件，例如计时器触发。 将单个线程分配给事件循环，处理事件不应执行任何阻塞或长时间运行的操作。 否则，线程阻塞，违背了使用事件循环的目的。
 
@@ -192,21 +192,21 @@ Java 长期以来一直有 `java.nio` (Java NIO) 包，它通过文件和网络�
 
 实现事件循环很容易。
 
-![image-20220527155602740](Chapter1-Fundamentals.assets/Listing_1_8.png)
+![清单 1.8 使用一个简单的事件循环](Chapter1-Fundamentals.assets/Listing_1_8.png)
 
 **清单 1.8** 中的代码显示了事件循环 API 的使用，其执行提供了以下控制台输出。
 
-![image-20220527155702905](Chapter1-Fundamentals.assets/Listing_1_9.png)
+![清单 1.9 事件循环示例的控制台输出](Chapter1-Fundamentals.assets/Listing_1_9.png)
 
 更复杂的事件循环实现是可能的，但下面清单中的实现依赖于事件队列和处理程序映射。
 
-![image-20220527155826507](Chapter1-Fundamentals.assets/Listing_1_10.png)
+![清单 1.10 一个简单的事件循环实现](Chapter1-Fundamentals.assets/Listing_1_10.png)
 
 事件循环在调用 run 方法的线程上运行，并且可以使用 `dispatch` 方法从其他线程安全地发送事件。
 
 最后但同样重要的是，事件只是一对键和数据，如下所示，它是`EventLoop`的静态内部类。
 
-![image-20220527160000452](Chapter1-Fundamentals.assets/Listing_1_11.png)
+![清单 1.11 一个简单的事件循环实现](Chapter1-Fundamentals.assets/Listing_1_11.png)
 
 ## 1.8 什么是反应式系统？
 
@@ -261,7 +261,7 @@ Vertx项目组织在可组合的模块中，**图 1.5** 显示了随机 Vert.x �
   - 一组模块，它们是社区支持的 Vert.x 堆栈的一部分，例如更好的 Web API (*vertx-web*) 或数据客户端 (*vertx-kafka-client*、*vertx-redis*、*vertx -mongo* 等）提供构建各种应用程序的功能。
   - 更广泛的项目生态系统提供了更多功能，例如与 Apache Cassandra 连接、非阻塞 I/O 以在系统进程之间进行通信等等。
 
-![image-20220527160932294](Chapter1-Fundamentals.assets/Figure_1_5.png)
+![图 1.5 Vert.x 应用程序结构概览](Chapter1-Fundamentals.assets/Figure_1_5.png)
 
 Vert.x 是 *多种语言的*，因为它支持大多数流行的 JVM 语言：JavaScript、Ruby、Kotlin、Scala、Groovy 等。 有趣的是，这些语言不仅仅通过它们与 Java 的互操作性得到支持。 正在生成惯用绑定，因此您可以编写在这些语言中仍然感觉自然的 Vert.x 代码。 例如，Scala 绑定使用 Scala future 的 API，而 Kotlin 绑定利用自定义 DSL 和具有命名参数的函数来简化一些代码结构。 当然，您可以在同一个 Vert.x 应用程序中混合和匹配不同的支持语言。
 
@@ -281,11 +281,11 @@ Vert.x 是 *多种语言的*，因为它支持大多数流行的 JVM 语言：Ja
 
 像 IntelliJ IDEA Community Edition 这样的集成开发环境 (IDE) 非常棒，它知道如何创建 Maven 和 Gradle 项目。 您同样可以使用 Eclipse、NetBeans 甚至 Visual Studio Code。
 
->  **💡提示:** 您还可以在 [https://start.vertx.io ](https://start.vertx.io/) 使用 `Vert.x starter web application`并生成项目框架以供下载。
+>  **💡提示:** 您还可以在 https://start.vertx.io/ 使用 `Vert.x starter web application`并生成项目框架以供下载。
 
 对于本章，让我们使用 Gradle。 一个合适的 `build.gradle.kts` 文件如下所示。
 
-![image-20220527161309007](Chapter1-Fundamentals.assets/Listing_1_12.png)
+![清单 1.12 构建和运行 VertxEcho 的 Gradle 配置](Chapter1-Fundamentals.assets/Listing_1_12.png)
 
 > **💡提示:** 对于Gradle 您可能更熟悉 Apache Maven。 本书使用 Gradle 是因为它是一种现代、高效且灵活的构建工具。 它还使用一种简洁的领域特定语言来编写构建文件，在书的上下文中它比 Maven XML 文件效果更好。 您将在源代码 Git 存储库中找到与 Gradle 等效的 Maven 构建描述符。
 
@@ -293,19 +293,19 @@ Vert.x 是 *多种语言的*，因为它支持大多数流行的 JVM 语言：Ja
 
 *Vertex Echo* 类的实现如**清单 1.15** 所示。 您可以使用运行任务（*gradle run* 或 *./gradlew run*）通过 Gradle 运行应用程序，如下所示。
 
-![image-20220527161459706](Chapter1-Fundamentals.assets/Listing_1_13.png)
+![清单 1.13 运行 VertxEcho](Chapter1-Fundamentals.assets/Listing_1_13.png)
 
 > **💡提示:** 如果您更喜欢 Maven，请从本书源代码 Git 存储库的 chapter1 文件夹中运行 `mvn compile exec:java` 而不是 `./gradlew run`。
 
 当然，您可以使用 `netcat` 命令与服务交互以回显文本，并且可以发出 HTTP 请求以查看打开的连接数，如下面的清单所示。
 
-![image-20220527161603404](Chapter1-Fundamentals.assets/Listing_1_14.png)
+![清单 1.14 通过 TCP 和 HTTP 与 VertxEcho 交互](Chapter1-Fundamentals.assets/Listing_1_14.png)
 
->  **💡提示:** http 命令来自位于 [httpie.org](https://httpie.org/) 的 `HTTPie` 项目。 此工具是 `curl` 的开发人员友好替代品，您可以轻松地将其安装在您的操作系统上。
+>  **💡提示:** http 命令来自位于 https://httpie.org/ 的 `HTTPie` 项目。 此工具是 `curl` 的开发人员友好替代品，您可以轻松地将其安装在您的操作系统上。
 
 现在让我们看看 `VertxEcho` 的代码。
 
-![image-20220527162403459](Chapter1-Fundamentals.assets/Listing_1_15.png)
+![清单 1.15 VertxEcho 类的实现](Chapter1-Fundamentals.assets/Listing_1_15.png)
 
 ```java
 package chapter1.firstapp;
@@ -370,7 +370,7 @@ public class VertxEcho {
 
 您可能听说过或经历过臭名昭著的**回调地狱**，回调嵌套在回调中，导致代码难以阅读和推理。
 
-![image-20220527163209979](Chapter1-Fundamentals.assets/Listing_1_16.png)
+![清单 1.16 回调地狱图解](Chapter1-Fundamentals.assets/Listing_1_16.png)
 
 请放心：虽然 Vert.x 核心 API 确实使用回调，但 Vert.x 提供了对更多编程模型的支持。 回调是事件驱动 API 中通知的规范方法，但正如您将在接下来的章节中看到的那样，可以在回调之上构建其他抽象，例如**futures** 和 **promises**、反应式扩展和协程。
 
@@ -380,9 +380,9 @@ public class VertxEcho {
 
 这是一个很好的问题。 重要的是要记住，虽然 Vert.x 是用于构建反应式应用程序的工具包，但使用 Vert.x API 和模块不会“自动”使应用程序成为反应式应用程序。 然而，Vert.x 提供的 事件驱动、非阻塞 API 满足了第一个条件。
 
-简单地说，答案是否定的，这个应用程序不是响应式的。弹性不是问题，因为惟一可能出现的错误是与I/O相关的—它们只会导致丢弃连接。应用程序也是响应性的，因为它不执行任何复杂的处理。如果我们对TCP和HTTP服务器进行基准测试，我们会得到非常好的延迟，并且偏差很低，异常值很少。下面的清单显示了一个不完美但很有说服力的快速基准测试，它从终端运行wrk ([https://github.com/wg/wrk](https://github.com/wg/wrk))。
+简单地说，答案是否定的，这个应用程序不是响应式的。弹性不是问题，因为惟一可能出现的错误是与I/O相关的—它们只会导致丢弃连接。应用程序也是响应性的，因为它不执行任何复杂的处理。如果我们对TCP和HTTP服务器进行基准测试，我们会得到非常好的延迟，并且偏差很低，异常值很少。下面的清单显示了一个不完美但很有说服力的快速基准测试，它从终端运行wrk (https://github.com/wg/wrk)。
 
-![image-20220527163341291](Chapter1-Fundamentals.assets/Listing_1_17.png)
+![清单 1.17 使用 wrk 进行基准测试的输出](Chapter1-Fundamentals.assets/Listing_1_17.png)
 
 反应式应用程序的罪魁祸首是弹性。 事实上，如果我们创建新实例，每个实例都会维护自己的连接计数器。 计数器范围是应用程序，因此它应该是所有实例之间共享的全局计数器。
 

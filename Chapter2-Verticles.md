@@ -1,6 +1,6 @@
 # 第二章: Vert.x的基本处理单元-Verticles
 
-> 翻译: 白石(https://github.com/wjw465150/Vert.x-Core-Manual)
+> 翻译: 白石(https://github.com/wjw465150/Vert.x-in-Action-ChineseVersion)
 
 **本章涵盖了**
 

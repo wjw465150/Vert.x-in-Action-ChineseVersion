@@ -1,5 +1,7 @@
 # 第三章: 事件总线：Vert.x 应用程序的支柱
 
+> 翻译: 白石(https://github.com/wjw465150/Vert.x-in-Action-ChineseVersion)
+
 **本章涵盖了**
   - 事件总线是什么
   - 如何通过事件总线进行点对点、**请求-回复** 和 **发布/订阅** 通信

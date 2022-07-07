@@ -1,5 +1,7 @@
 # 第五章: 超越回调
 
+> 翻译: 白石(https://github.com/wjw465150/Vert.x-in-Action-ChineseVersion)
+
 **本章涵盖了**
 
   - 回调及其限制，如网关/边缘服务示例所示
