@@ -15,13 +15,13 @@
 
 在第 3 章中，我们以热传感器为例。 我们有一个 *SensorData* verticle，它保存每个传感器的最后观察值，并使用事件总线上的**请求/应答**通信计算它们的平均值。 下面的清单显示了我们用来计算温度平均值的代码。
 
-![](Chapter6-BeyondTheEventBus.assets/Listing_6_1.png)
+![清单 6.1 基于事件总线的平均计算 API](Chapter6-BeyondTheEventBus.assets/Listing_6_1.png)
 
 此代码与 Vert.x 事件总线 API 紧密耦合，因为它需要接收消息并回复它。 任何愿意调用 *average* 的软件组件都必须通过事件总线发送消息并期待响应。
 
 但是，如果我们可以拥有一个带有调用方法的常规 Java 接口，而不必通过事件总线发送和接收消息呢？ 下一个清单中提出的接口将与事件总线完全无关。
 
-![](Chapter6-BeyondTheEventBus.assets/Listing_6_2.png)
+![清单 6.2 作为 Java 接口的热传感器 API](Chapter6-BeyondTheEventBus.assets/Listing_6_2.png)
 
 提议的接口具有带有尾随回调参数的方法，因此调用者将被异步通知响应和错误。 *`Handler<AsyncResult<T>>`* 类型通常用于 Vert.x API 中的回调，其中 `T` 可以是任何东西，但通常是 JSON 类型。
 
@@ -38,7 +38,7 @@ Vert.x 事件总线服务是一种*异步 RPC*：
 
 图 6.1 说明了在调用 *SensorDataService* 接口的 *average* 方法时所涉及的各种组件。 客户端代码调用服务代理上的 *average* 方法。 这是一个实现 *SensorDataService* 接口的对象，然后在事件总线上将消息发送到 *sensor.data-service* 目的地（可以配置）。 消息体包含方法调用参数值，所以因为*average*只接受回调，所以消息体为空。 该消息还有一个 **action** 标头，指示正在调用哪个方法。
 
-![](Chapter6-BeyondTheEventBus.assets/Figure_6_1.png)
+![图 6.1 服务代理如何工作](Chapter6-BeyondTheEventBus.assets/Figure_6_1.png)
 
 **代理处理程序(proxy handler)**侦听 *sensor.data-service* 目标并根据消息的操作标头和正文分派方法调用。 这里使用了实际的 *SensorDataService* 实现，并调用了 *average* 方法。 然后，**代理处理程序(proxy handler)**使用通过 *average* 方法回调传递的值回复事件总线消息。 反过来，客户端通过**服务代理(service proxy  )**接收回复，**服务代理(service proxy)**将回复传递给来自客户端调用的回调。
 
@@ -54,13 +54,15 @@ Vert.x 不依赖于通过字节码工程或运行时反射的魔法，因此需�
 
 完整的 *SensorDataService* 接口在以下列表中详细说明。
 
-![](Chapter6-BeyondTheEventBus.assets/Listing_6_3.png)
+![清单 6.3 传感器数据服务](Chapter6-BeyondTheEventBus.assets/Listing_6_3.png)
 
 `@ProxyGen` 注解用于标记事件总线服务接口，以生成代理代码。
 
 您还需要定义一个 `package-info.java` 文件并使用 `@ModuleGen` 注解包定义以启用注解处理器，如下面的清单所示。
 
-![](Chapter6-BeyondTheEventBus.assets/Listing_6_4.png)
+![清单 6.4 包信息文件和启用代码生成](Chapter6-BeyondTheEventBus.assets/Listing_6_4.png)
+
+> **🏷注意:** 译者注: groupPackage和name的值必需与package的值一样!
 
 服务接口中的方法需要遵守一些约定，特别是将回调作为最后一个参数。 你会很想使用返回值而不是回调，但请记住，我们正在处理异步操作，所以我们需要回调！ 服务接口具有服务实现 (*create*) 和代理 (*createProxy*) 的工厂方法是**惯用**的。 这些方法极大地简化了获取代理或发布服务的代码。
 
@@ -72,7 +74,7 @@ Vert.x 不依赖于通过字节码工程或运行时反射的魔法，因此需�
 
 以下服务实现是对第 3 章代码的直接改编。
 
-![](Chapter6-BeyondTheEventBus.assets/Listing_6_5.png)
+![清单 6.5 SensorDataService 的实现](Chapter6-BeyondTheEventBus.assets/Listing_6_5.png)
 
 与第 3 章的代码相比，我们大部分都将事件总线代码替换为通过已完成的future对象传递异步结果。 此代码也没有对生成的**服务代理处理程序(proxy handler)**代码的引用。
 
@@ -84,7 +86,7 @@ Vert.x 不依赖于通过字节码工程或运行时反射的魔法，因此需�
 
 要使 Vert.x 代码生成与 Gradle 中的注解处理一起使用，您将需要类似于以下内容的配置。
 
-![](Chapter6-BeyondTheEventBus.assets/Listing_6_6.png)
+![清单 6.6 代码生成的 Gradle 配置](Chapter6-BeyondTheEventBus.assets/Listing_6_6.png)
 
 现在，每当编译 Java 类时，都会生成代理类。 您可以在项目的 `src/main/generated` 文件夹中查看文件。
 
@@ -94,9 +96,11 @@ Vert.x 不依赖于通过字节码工程或运行时反射的魔法，因此需�
 
 事件总线服务需要部署到 Verticle，并且需要定义事件总线地址。 以下清单显示了如何部署服务。
 
-![](Chapter6-BeyondTheEventBus.assets/Listing_6_7.png)
+![清单 6.7 部署服务](Chapter6-BeyondTheEventBus.assets/Listing_6_7.png)
 
 > 译者注:  `register()`方法里创建**服务代理处理程序(proxy handler)**对象并对**服务代理(service proxy)**发送的事件进行事件消费
+
+> **💡提示:** 译者注: 为了提高处理速度,可以在同一个地址上重复注册异步服务.其实内部就是在相同的EvenBus地址上添加了新的consumer!
 
 部署就像绑定到地址并传递服务实现一样简单。 我们可以使用 *SensorDataService* 接口中的工厂 *create* 方法来执行此操作。
 
@@ -104,7 +108,7 @@ Vert.x 不依赖于通过字节码工程或运行时反射的魔法，因此需�
 
 通过调用相应的工厂方法并传递正确的事件总线地址来获得用于发出方法调用的服务代理，如下面的清单所示。
 
-![](Chapter6-BeyondTheEventBus.assets/Listing_6_8.png)
+![Listing 6.8 Obtaining a service proxy  ](Chapter6-BeyondTheEventBus.assets/Listing_6_8.png)
 
 服务接口遵循回调模型，因为这是（异步）服务接口的规范定义。
 
@@ -114,13 +118,13 @@ Vert.x 不依赖于通过字节码工程或运行时反射的魔法，因此需�
 
 要实现此功能，需要将`@VertxGen`注解添加到服务接口，如下所示。
 
-![](Chapter6-BeyondTheEventBus.assets/Listing_6_9.png)
+![清单 6.9 将 @VertxGen 添加到服务接口](Chapter6-BeyondTheEventBus.assets/Listing_6_9.png)
 
 当此注解存在时，Vert.x Java 注解处理器的代码生成将在构建时启用所有合适的代码生成器。
 
 要生成 RxJava 绑定，我们需要在以下清单中添加依赖项。
 
-![](Chapter6-BeyondTheEventBus.assets/Listing_6_10.png)
+![清单 6.10 RxJava 代码生成的依赖项](Chapter6-BeyondTheEventBus.assets/Listing_6_10.png)
 
 当我们编译项目时，会生成一个 *chapter6.reactivex.SensorDataService* 类。 这是一个将原始回调 API 连接到 RxJava 的小垫片。 该类具有原始 *SensorDataService* API 中的所有方法（包括 *create* 工厂方法），以及带有 rx 前缀的方法。
 
@@ -128,7 +132,7 @@ Vert.x 不依赖于通过字节码工程或运行时反射的魔法，因此需�
 
 下一个清单显示了使用生成的 RxJava API 的示例。
 
-![](Chapter6-BeyondTheEventBus.assets/Listing_6_11.png)
+![清单 6.11 使用 SensorDataService 的 RxJava 变体](Chapter6-BeyondTheEventBus.assets/Listing_6_11.png)
 
 此处创建的 RxJava 管道每三秒进行一次新订阅，并将平均值提取到一个字符串中，然后显示在标准输出中。
 
@@ -155,7 +159,7 @@ Vert.x 支持经典的 JUnit 4 测试框架以及最新的 JUnit 5 测试框架�
 
 在 Gradle 项目中，需要更新 *dependencies* 部分，如下所示。
 
-![](Chapter6-BeyondTheEventBus.assets/Listing_6_12.png)
+![清单 6.12 使用带有 Vert.x 的 JUnit 5 进行 Gradle 构建](Chapter6-BeyondTheEventBus.assets/Listing_6_12.png)
 
 *vertx-junit5* 库已经依赖于 *junit-jupiter-api*，但在构建中修复版本是一个好习惯。 *junit-jupiter-engine* 模块需要存在于 Gradle 的 *testRuntime* 范围内。 最后，JUnit 5 可以与任何断言 API 一起使用，包括它的内置 API，而 AssertJ 是一种流行的 API。
 
@@ -167,11 +171,11 @@ Vert.x 支持经典的 JUnit 4 测试框架以及最新的 JUnit 5 测试框架�
 
 **图 6.2** 显示了测试环境的交互。 测试用例有一个代理引用来调用*SensorDataService*。 实际的 *DataVerticle* verticle 部署在 *sensor.data-service* 目的地。 它可以从测试中发出 *valueFor* 和 *average* 方法调用。 由于 *DataVerticle* 从事件总线上的传感器接收消息，我们可以发送任意消息，而不是部署我们无法控制的实际 *HeatSensor* verticles。 模拟一个 Verticle 通常就像发送它要发送的消息类型一样简单。
 
-![](Chapter6-BeyondTheEventBus.assets/Figure_6_2.png)
+![图 6.2 隔离 SensorDataService](Chapter6-BeyondTheEventBus.assets/Figure_6_2.png)
 
 以下清单显示了测试类序言。
 
-![](Chapter6-BeyondTheEventBus.assets/Listing_6_13.png)
+![清单 6.13 SensorDataServiceTest 的前言](Chapter6-BeyondTheEventBus.assets/Listing_6_13.png)
 
 JUnit 5 支持扩展以提供附加功能。 特别是，扩展可以将参数注入测试方法，它们可以拦截生命周期事件，例如调用测试方法之前和之后。 *VertxExtension* 类通过执行以下操作来简化编写测试用例：
   - 使用默认配置注入 *Vertx* 的现成实例
@@ -184,7 +188,7 @@ JUnit 5 支持扩展以提供附加功能。 特别是，扩展可以将参数�
 
 您可以在以下清单中看到第一个测试用例，当没有部署传感器时。
 
-![](Chapter6-BeyondTheEventBus.assets/Listing_6_14.png)
+![清单 6.14 没有传感器的测试用例](Chapter6-BeyondTheEventBus.assets/Listing_6_14.png)
 
 此测试用例假设没有部署传感器，因此尝试获取任何传感器值肯定会失败。 我们通过查找不存在的传感器 *abc* 的温度值来检查此行为。 然后我们检查平均值是否为 0。
 
@@ -200,7 +204,7 @@ JUnit 5 支持扩展以提供附加功能。 特别是，扩展可以将参数�
 
 最后，当有传感器时，我们有一个测试用例。
 
-![](Chapter6-BeyondTheEventBus.assets/Listing_6_15.png)
+![清单 6.15 带有传感器的测试用例](Chapter6-BeyondTheEventBus.assets/Listing_6_15.png)
 
 该测试通过在事件总线上发送虚假传感器数据更新来模拟具有标识符 *abc* 和 *def* 的两个传感器，就像传感器所做的那样。 然后，我们的断言具有确定性，我们可以检查 *valueFor* 和 *average* 方法的行为。
 
@@ -210,7 +214,7 @@ JUnit 5 支持扩展以提供附加功能。 特别是，扩展可以将参数�
 
 Gradle 在 *build/reports/tests/test/index.html* 中生成人类可读的测试报告。 当您在网络浏览器中打开该文件时，您可以检查所有测试是否通过，如**图 6.3** 所示。
 
-![](Chapter6-BeyondTheEventBus.assets/Figure_6_3.png)
+![图 6.3 测试报告](Chapter6-BeyondTheEventBus.assets/Figure_6_3.png)
 
 请注意，Gradle *test* 任务是 *build* 的依赖项，因此测试总是在项目完全构建时执行。
 

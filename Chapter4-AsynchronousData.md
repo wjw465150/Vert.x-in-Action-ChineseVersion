@@ -43,22 +43,22 @@ Vert.x中的流跨越了广泛的源和接收范围，包括**表 4.1**中列出
 
 **表4.2 ReadStream 基本方法**
 
-| **方法**                             | **描述**                                                     |
-| ------------------------------------ | ------------------------------------------------------------ |
-| handler(Handler<T>)                  | 处理 T 类型的新读取值（例如 Buffer、byte[]、JsonObject 等）  |
-| exceptionHandler(Handler<Throwable>) | 处理读取异常                                                 |
-| endHandler(Handler<Void>)            | 当流结束时调用，原因可能是所有数据都已读取，也可能是引发了异常 |
+| **方法**                               | **描述**                                                     |
+| -------------------------------------- | ------------------------------------------------------------ |
+| `handler(Handler<T>)`                  | 处理 T 类型的新读取值（例如 Buffer、byte[]、JsonObject 等）  |
+| `exceptionHandler(Handler<Throwable>)` | 处理读取异常                                                 |
+| `endHandler(Handler<Void>)`            | 当流结束时调用，原因可能是所有数据都已读取，也可能是引发了异常 |
 
 类似地，**表 4.3** 中列出的写流的基本方法允许我们写数据，结束流，并在发生异常时得到通知。
 
 **表4.3 WriteStream基本方法**
 
-| **方法**                             | **描述**                                                     |
-| ------------------------------------ | ------------------------------------------------------------ |
-| write(T)                             | 写入一些类型为 T 的数据（例如 Buffer、byte[]、JsonObject 等） |
-| exceptionHandler(Handler<Throwable>) | 处理写入异常                                                 |
-| end()                                | 结束流                                                       |
-| end(T)                               | 写入一些类型为 T 的数据，然后结束流                          |
+| **方法**                               | **描述**                                                     |
+| -------------------------------------- | ------------------------------------------------------------ |
+| `write(T)`                             | 写入一些类型为 T 的数据（例如 Buffer、byte[]、JsonObject 等） |
+| `exceptionHandler(Handler<Throwable>)` | 处理写入异常                                                 |
+| `end()`                                | 结束流                                                       |
+| `end(T)`                               | 写入一些类型为 T 的数据，然后结束流                          |
 
 在前面的章节中，我们已经在不知不觉中操纵了流，例如使用 TCP 和 HTTP 服务器。
 
@@ -66,7 +66,7 @@ Vert.x中的流跨越了广泛的源和接收范围，包括**表 4.1**中列出
 
 假设我们要读取文件的内容并将其内容输出到标准控制台输出。
 
-![](Chapter4-AsynchronousData.assets/Listing_4_1.png)
+![清单 4.1 使用 JDK I/O API 读取文件](Chapter4-AsynchronousData.assets/Listing_4_1.png)
 
 ```java
 package chapter4.streamapis;
@@ -103,7 +103,7 @@ public class JdkStreams {
 
 以下清单显示了与**清单 4.1** 中相同的代码，但使用了 Vert.x 异步文件 API。
 
-![](Chapter4-AsynchronousData.assets/Listing_4_2.png)
+![清单 4.2 使用 Vert.x 流读取文件](Chapter4-AsynchronousData.assets/Listing_4_2.png)
 
 ```java
 package chapter4.streamapis;
@@ -165,7 +165,7 @@ Linux 分发映像通常以 `.iso` 文件的形式分发，并且很容易达到
 
 **图 4.1** 说明了这将如何与 Vert.x 一起工作，尽管这也适用于任何非阻塞 I/O API。 数据缓冲区从文件流中读取，然后传递给处理程序。 除了直接将每个缓冲区写入 HTTP 响应流之外，处理程序不太可能做任何事情。 每个缓冲区最终都会直接或作为较小的块写入底层 TCP 缓冲区。 由于 TCP 缓冲区可能已满（由于网络或客户端繁忙），因此有必要维护一个待写入的未决缓冲区缓冲区（**图 4.1** 中的写入队列）。 请记住，写操作是非阻塞的，因此需要缓冲。 这听起来像是一个非常简单的处理管道，那么可能会出现什么问题呢？
 
-![](Chapter4-AsynchronousData.assets/Figure_4_1.png)
+![图 4.1 在没有任何背压信号的情况下在流之间读取和写入数据](Chapter4-AsynchronousData.assets/Figure_4_1.png)
 
 从文件系统中读取通常是快速且低延迟的，并且给定多个读取请求，操作系统可能会将一些页面缓存到 RAM 中。 相比之下，写入网络要慢得多，带宽取决于最弱的网络链接。 也会出现延迟。
 
@@ -181,11 +181,11 @@ Linux 分发映像通常以 `.iso` 文件的形式分发，并且很容易达到
 
 **表 4.4 ReadStream 背压管理方式**
 
-| **方法** |                                **描述**                                |
-| -------- | --------------------------------------------------------------------- |
-| pause()  | 暂停流，防止进一步的数据发送到处理程序。                                   |
-| resume() | 再次开始读取数据并将其发送到处理程序。                                     |
-| fetch(n) | 要求（最多）读取 n 个元素。 在调用 fetch(n) 之前必须暂停流(调用pause方法)。 |
+| **方法**   | **描述**                                                     |
+| ---------- | ------------------------------------------------------------ |
+| `pause()`  | 暂停流，防止进一步的数据发送到处理程序。                     |
+| `resume()` | 再次开始读取数据并将其发送到处理程序。                       |
+| `fetch(n)` | 要求（最多）读取 n 个元素。 在调用 `fetch(n)` 之前必须暂停流(调用pause方法)。 |
 
 当读取流暂停时，可以请求获取一定数量的元素，这是异步拉取的一种形式。这意味着处理器可以使用**fetch**请求元素，设置自己的速度。你将在本章的最后一节看到具体的例子。
 
@@ -197,9 +197,9 @@ Linux 分发映像通常以 `.iso` 文件的形式分发，并且很容易达到
 
 |           **方法**           |                                                                  **描述**                                                                  |
 | --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| setWriteQueueMaxSize(int)   | 定义在被视为已满之前，最大写入缓冲区队列大小应该是多少。 这是要写入的排队 Vert.x 缓冲区的大小，而不是实际字节的大小，因为排队的缓冲区可能具有不同的大小。 |
-| boolean writeQueueFull()    | 指示写缓冲区队列大小何时已满。                                                                                                                |
-| drainHandler(Handler<Void>) | 定义一个回调函数，当写缓冲区队列被清空时被调用(通常是当它返回到其最大大小的一半时)。                                                                |
+| `setWriteQueueMaxSize(int)` | 定义在被视为已满之前，最大写入缓冲区队列大小应该是多少。 这是要写入的排队 Vert.x 缓冲区的大小，而不是实际字节的大小，因为排队的缓冲区可能具有不同的大小。 |
+| `boolean writeQueueFull()`  | 指示写缓冲区队列大小何时已满。                                                                                                                |
+| `drainHandler(Handler<Void>)` | 定义一个回调函数，当写缓冲区队列被清空时被调用(通常是当它返回到其最大大小的一半时)。                                                                |
 
 写缓冲区队列有一个最大大小，超过这个大小就认为已满。写队列有默认的大小，您很少想要调整，但是如果您愿意，您可以这样做。注意，仍然可以进行写操作，数据将在队列中累积。写入器应该检查队列何时已满，但没有强制写入。当写入器知道写入队列已满时，可以通过**drain handler**通知当写队列清空时来调用此回调函数。通常，当写队列的一半被耗尽时，就会发生这种情况。
 
@@ -226,7 +226,7 @@ Linux 分发映像通常以 `.iso` 文件的形式分发，并且很容易达到
 
 这个例子将让我们看到如何处理自定义流节奏和不同的背压管理策略，以及如何解析流。
 
-![](Chapter4-AsynchronousData.assets/Figure_4_2.png)
+![图 4.2 Jukebox 应用程序概览](Chapter4-AsynchronousData.assets/Figure_4_2.png)
 
 ### 4.3.1 功能和使用
 
@@ -234,19 +234,19 @@ Linux 分发映像通常以 `.iso` 文件的形式分发，并且很容易达到
 
 >  **🏷注意:** 如果您希望点唱机播放音乐，您需要将一些 MP3 文件复制到项目目录中名为 `track/` 的文件夹中。
 
-![](Chapter4-AsynchronousData.assets/Listing_4_3.png)
+![清单 4.3 运行点唱机应用程序](Chapter4-AsynchronousData.assets/Listing_4_3.png)
 
 此应用程序中部署了两个 Verticle：
   - **Jukebox** 提供了主要的音乐流媒体逻辑和HTTP服务器接口，供音乐播放器连接。
  - **NetControl** 提供一个基于文本的TCP协议，用于远程控制点唱机应用程序。
 
-![](Chapter4-AsynchronousData.assets/Figure_4_3.png)
+![图 4.3 VLC 连接到点唱机](Chapter4-AsynchronousData.assets/Figure_4_3.png)
 
 要听音乐，用户可以连接VLC等播放器(**见图4.3**)，甚至可以直接在`http://localhost:8080/`上打开web浏览器。
 
 另一方面，玩家可以通过**netcat**这样的工具来控制，使用纯文本命令来列出所有文件，安排播放的曲目，以及暂停或重新启动流。**清单4.4** 显示了使用**netcat**的交互式会话。
 
-![](Chapter4-AsynchronousData.assets/Listing_4_4.png)
+![清单 4.4 用 netcat 控制点唱机](Chapter4-AsynchronousData.assets/Listing_4_4.png)
 
 >  **💡提示:** *netcat* 可能在您的 Unix 环境中以 nc 的形式提供。 在 WSL 环境之外，我不知道有适用于 Windows 的友好且等效的工具。
 
@@ -270,7 +270,7 @@ curl -o out.mp3 http://localhost:8080/download/intro.mp3
 
 让我们看看这些部分是如何实现的。
 
-![](Chapter4-AsynchronousData.assets/Figure_4_4.png)
+![图 4.4 HTTP 服务器处理大图](Chapter4-AsynchronousData.assets/Figure_4_4.png)
 
 
 
@@ -278,23 +278,23 @@ curl -o out.mp3 http://localhost:8080/download/intro.mp3
 
 下一个清单显示 Jukebox Verticle 类的状态由播放状态和播放列表定义。
 
-![](Chapter4-AsynchronousData.assets/Listing_4_5.png)
+![清单 4.5 Jukebox 类的状态](Chapter4-AsynchronousData.assets/Listing_4_5.png)
 
 枚举类型 *State* 定义了两种状态，而 *Queue* 保存了接下来要播放的所有预定曲目。 同样，Vert.x 线程模型确保单线程访问，因此不需要并发集合和临界区。
 
 *Jukebox* verticle（清单 4.6）的 *start* 方法需要配置一些事件总线处理程序，这些处理程序对应于可以从 TCP 文本协议使用的命令和操作。 我们稍后会剖析的 *NetControl* verticle 处理 TCP 服务器的内部并将消息发送到事件总线。
 
-![](Chapter4-AsynchronousData.assets/Listing_4_6.png)
+![清单 4.6 在 Jukebox verticle 中设置事件总线处理程序](Chapter4-AsynchronousData.assets/Listing_4_6.png)
 
 请注意，因为我们已经抽象了事件总线上的命令传输，所以我们可以轻松插入新的方式来命令点唱机，例如使用移动应用程序、Web 应用程序等。
 
 以下清单提供了播放/暂停和调度处理程序。 这些方法直接操纵播放和播放列表状态。
 
-![](Chapter4-AsynchronousData.assets/Listing_4_7.png)
+![清单 4.7 Jukebox verticle 中的播放/暂停和调度操作](Chapter4-AsynchronousData.assets/Listing_4_7.png)
 
 列出可用的文件有点复杂，如下面的清单所示。
 
-![](Chapter4-AsynchronousData.assets/Listing_4_8.png)
+![清单 4.8 列出 Jukebox verticle 中的所有可用文件](Chapter4-AsynchronousData.assets/Listing_4_8.png)
 
 ### 4.3.4 传入的HTTP连接
 
@@ -302,15 +302,15 @@ curl -o out.mp3 http://localhost:8080/download/intro.mp3
 
 HTTP服务器在verticle的`start`方法中启动(参见下一个清单)。
 
-![](Chapter4-AsynchronousData.assets/Listing_4_9.png)
+![清单 4.9 在 Jukebox verticle 中设置 HTTP 服务器](Chapter4-AsynchronousData.assets/Listing_4_9.png)
 
 Vert.x HTTP服务器使用的请求处理程序如下面的清单所示。它将HTTP请求转发到*openAudioStream*和*download*实用程序方法，这些方法完成请求和进行处理。
 
-![](Chapter4-AsynchronousData.assets/Listing_4_10.png)
+![清单 4.10 HTTP 请求处理程序和调度程序](Chapter4-AsynchronousData.assets/Listing_4_10.png)
 
 **openAudioStream**方法的实现如下所示。它将流准备为分块模式，设置适当的内容类型，并将响应对象留到以后使用。
 
-![](Chapter4-AsynchronousData.assets/Listing_4_11.png)
+![清单 4.11 处理新的流播放器](Chapter4-AsynchronousData.assets/Listing_4_11.png)
 
 ### 4.3.5 尽可能高效地下载
 
@@ -318,15 +318,15 @@ Vert.x HTTP服务器使用的请求处理程序如下面的清单所示。它将
 
 以下清单显示了我们如何查找文件，当它存在时，我们将最终下载任务转发给 **downloadFile** 方法。
 
-![](Chapter4-AsynchronousData.assets/Listing_4_12.png)
+![清单 4.12 下载方法](Chapter4-AsynchronousData.assets/Listing_4_12.png)
 
 **downloadFile** 方法的实现如以下清单所示。
 
-![](Chapter4-AsynchronousData.assets/Listing_4_13.png)
+![清单 4.13 下载文件](Chapter4-AsynchronousData.assets/Listing_4_13.png)
 
 在两个流之间复制数据时，要注意背压。当策略是暂停源且不丢失任何数据时，通常会这样做，因此可以重写相同的代码，如以下清单所示。
 
-![](Chapter4-AsynchronousData.assets/Listing_4_14.png)
+![清单 4.14 管道助手](Chapter4-AsynchronousData.assets/Listing_4_14.png)
 
 在可暂停的 **ReadStream** 和 **WriteStream** 之间进行复制时，管道会处理背压。 它还管理源流的结束和两个流上的错误。 **清单 4.14** 的代码与 **清单 4.13** 中的代码完全相同，但没有使用样板文件。 **pipeTo** 还有其他变体用于指定自定义处理程序。
 
@@ -348,7 +348,7 @@ MP3 解码器对错误非常有弹性，因此如果它们在文件中间开始�
 
 相比之下，如果我们控制 MP3 文件的读取速率，从而控制 MP3 块被复制和写入连接的播放器的速率，我们可以确保它们或多或少都在相同的位置。
 
-![](Chapter4-AsynchronousData.assets/Figure_4_5.png)
+![图 4.5 不带和带速率控制的流式传输](Chapter4-AsynchronousData.assets/Figure_4_5.png)
 
 这里的速率控制就是确保所有播放器都足够快地接收数据，以便他们可以不间断地播放，但不能太快，以免缓冲太多数据。
 
@@ -356,13 +356,13 @@ MP3 解码器对错误非常有弹性，因此如果它们在文件中间开始�
 
 让我们看看完整的 *Jukebox* verticle的 `start` 方法，因为它显示了非常需要的计时器。
 
-![](Chapter4-AsynchronousData.assets/Listing_4_15.png)
+![清单 4.15 Jukebox Verticle 类启动方法](Chapter4-AsynchronousData.assets/Listing_4_15.png)
 
 除了连接事件总线处理程序和启动 HTTP 服务器之外，**start** 方法还定义了一个计时器，以便每 100 毫秒传输一次数据。
 
 接下来，我们可以看看 **streamAudioChunk** 方法的实现。
 
-![](Chapter4-AsynchronousData.assets/Listing_4_16.png)
+![清单 4.16 流文件块](Chapter4-AsynchronousData.assets/Listing_4_16.png)
 
 **为什么是这些值？**
 
@@ -375,7 +375,7 @@ MP3 解码器对错误非常有弹性，因此如果它们在文件中间开始�
 
 **streamAudioChunk** 的代码读取最多 4096 字节的块。 由于该方法将始终每秒调用 10 次，因此还需要检查是否正在播放任何内容。 **processReadBuffer** 方法流式传输数据，如下面的清单所示。
 
-![](Chapter4-AsynchronousData.assets/Listing_4_17.png)
+![清单 4.17 将数据块流式传输到播放器](Chapter4-AsynchronousData.assets/Listing_4_17.png)
 
 对于播放器的每个 HTTP 响应流，该方法都会复制读取的数据。 请注意，这里还有一种背压管理的情况：当客户端的写入队列已满时，我们只是简单地丢弃数据。 在播放器端，这会导致音频掉线，但由于服务器上的队列已满，这意味着播放器无论如何都会有延迟或掉线。 丢弃数据很好，因为 MP3 解码器知道如何恢复，并且它确保播放将与其他播放器保持紧密的时间。
 
@@ -383,7 +383,7 @@ MP3 解码器对错误非常有弹性，因此如果它们在文件中间开始�
 
 最后，以下清单中的辅助方法可以打开和关闭文件。
 
-![](Chapter4-AsynchronousData.assets/Listing_4_18.png)
+![清单 4.18 打开和关闭文件](Chapter4-AsynchronousData.assets/Listing_4_18.png)
 
 ## 4.4 解析简单的流
 
@@ -396,10 +396,10 @@ MP3 解码器对错误非常有弹性，因此如果它们在文件中间开始�
 ```
 
 这些是动作：
-  - /list - 列出可播放的文件
-  - /play - 播放流
-  - /pause - 暂停流
-  - /schedule file - 在播放列表的末尾追加文件
+  - **/list** - 列出可播放的文件
+  - **/play** - 播放流
+  - **/pause** - 暂停流
+  - **/schedule file** - 在播放列表的末尾追加文件
 
 每个文本行只能有一个命令，因此该协议被称为*换行分隔*。
 
@@ -428,17 +428,17 @@ t-now.mp3
 
 在我们的例子中，我们需要在流中寻找换行符。 以下清单显示了如何在 *NetControl* verticle 中使用 **RecordParser**。
 
-![](Chapter4-AsynchronousData.assets/Listing_4_19.png)
+![清单 4.19 基于 TCP 服务器流上的换行符的记录解析器](Chapter4-AsynchronousData.assets/Listing_4_19.png)
 
 解析器既是读取流又是写入流，因为它充当两个流之间的适配器。 它摄取来自 TCP 套接字的中间缓冲区，并将解析的数据作为新缓冲区发出。 这是相当透明的并且简化了verticle实现的其余部分。
 
 在下一个清单中，每个缓冲区都被称为一行，因此我们可以直接处理命令。
 
-![](Chapter4-AsynchronousData.assets/Listing_4_20.png)
+![清单 4.20 处理已解析的缓冲区](Chapter4-AsynchronousData.assets/Listing_4_20.png)
 
 简单命令位于 case 子句中，其他命令位于单独的方法中，如下表所示。
 
-![](Chapter4-AsynchronousData.assets/Listing_4_21.png)
+![清单 4.21 其他命令](Chapter4-AsynchronousData.assets/Listing_4_21.png)
 
 ## 4.5 解析复杂的流
 
@@ -463,7 +463,7 @@ t-now.mp3
 
 首先，让我们编写一个程序，将一个数据库写入一个文件，其中包含两个键/值条目。下面的清单展示了如何使用Vertx文件系统api打开文件，将数据追加到缓冲区，然后写入它。
 
-![](Chapter4-AsynchronousData.assets/Listing_4_22.png)
+![清单 4.22 将示例数据库写入文件](Chapter4-AsynchronousData.assets/Listing_4_22.png)
 
 在这个例子中，我们只有很少的数据，所以我们使用了一个在将数据写入文件之前完全准备好的缓冲区，但我们也可以同样地使用一个缓冲区用于头文件，并为每个键/值条目使用新缓冲区。
 
@@ -473,11 +473,11 @@ t-now.mp3
 
 下面的清单打开了我们之前编写的文件，并将*RecordParser*对象置于固定模式，因为我们正在寻找一个代表魔法头的四个字节的序列。当读取幻数时，将调用我们安装的处理程序。
 
-![](Chapter4-AsynchronousData.assets/Listing_4_23.png)
+![清单 4.23 读取数据库流，步骤 1](Chapter4-AsynchronousData.assets/Listing_4_23.png)
 
 下一个清单提供了更多方法的实现。
 
-![](Chapter4-AsynchronousData.assets/Listing_4_24.png)
+![清单 4.23 读取数据库流，步骤 2](Chapter4-AsynchronousData.assets/Listing_4_24.png)
 
 *readMagicNumber* 方法从缓冲区中提取幻数的四个字节。 我们知道缓冲区正好是四个字节，因为解析器处于固定大小模式。
 
@@ -485,11 +485,11 @@ t-now.mp3
 
 下面的清单读取键名、值长度和正确的值，*finishEntry* 设置解析器查找整数并委托给 *readKey*。
 
-![](Chapter4-AsynchronousData.assets/Listing_4_25.png)
+![清单 4.23 读取数据库流，步骤 3](Chapter4-AsynchronousData.assets/Listing_4_25.png)
 
 下一个清单显示了使用**清单 4.23** 到 **4.25** 的解析方法读取数据库文件时的一些示例输出。
 
-![](Chapter4-AsynchronousData.assets/Listing_4_26.png)
+![清单 4.26 读取数据库流的日志](Chapter4-AsynchronousData.assets/Listing_4_26.png)
 
 这些动态解析器模式和处理程序的更改形成了一种非常简单而有效的解析复杂流的方法。
 
@@ -505,13 +505,13 @@ t-now.mp3
 
 相反，让我们回到数据库读取示例。 **清单 4.23** 到 **清单4.25** 中的读取流推送事件。 切换到获取模式并拉取数据不需要很多更改。 以下清单显示了流初始化代码。
 
-![](Chapter4-AsynchronousData.assets/Listing_4_27.png)
+![清单 4.27 将读取流置于 fetch 模式](Chapter4-AsynchronousData.assets/Listing_4_27.png)
 
 请记住，**RecordParser** 修饰文件流。 它被暂停，然后 **fetch** 方法请求一个元素。 由于解析器发出解析数据的缓冲区，因此在本例中请求一个元素意味着请求一个 4 字节的缓冲区（幻数）。 最终，解析器处理程序将被调用来处理请求的缓冲区，并且在再次调用 **fetch** 方法之前不会发生任何其他事情。
 
 下面的清单显示了两个解析处理程序方法及其对获取模式的适应。
 
-![](Chapter4-AsynchronousData.assets/Listing_4_28.png)
+![清单 4.28 根据需要获取流数据](Chapter4-AsynchronousData.assets/Listing_4_28.png)
 
 两种模式的唯一区别是我们需要通过调用 **fetch** 来请求元素。 在编写 Vert.x 应用程序时，您可能不需要使用 **fetch** 模式，但如果您需要手动控制读取流，它是一个有用的工具。
 

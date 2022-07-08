@@ -25,9 +25,9 @@
 
 请求者向边缘服务发出请求，边缘服务又从传感器服务中获取温度数据。 每个传感器都公开一个 HTTP/JSON API，边缘服务将所有响应聚合在一个更大的 JSON 文档中。
 
-![](Chapter5-BeyondCcallbacks.assets/Figure_5_1.png)
+![图 5.1 边缘服务场景](Chapter5-BeyondCallbacks.assets/Figure_5_1.png)
 
-![](Chapter5-BeyondCcallbacks.assets/Figure_5_2.png)
+![图 5.2 边缘、传感器和快照服务之间的交互](Chapter5-BeyondCallbacks.assets/Figure_5_2.png)
 
 然后将该文档发送到快照服务，然后再发送回请求者。 交互过程总结在 **图5.2** 中。
 
@@ -41,13 +41,13 @@
 
 下面的 *HeatSensor* 类是对我们之前使用的类的简单改编。 **清单 5.1** 显示了该类的前面一些代码，直接从第 3 章中的代码移植而来。
 
-![](Chapter5-BeyondCcallbacks.assets/Listing_5_1.png)
+![清单 5.1 热传感器verticle](Chapter5-BeyondCallbacks.assets/Listing_5_1.png)
 
 代码保持相同的随机更新温度逻辑，随机延迟在 1 到 6 秒之间。
 
 以下清单显示了为公开 HTTP API 而添加的代码。
 
-![](Chapter5-BeyondCcallbacks.assets/Listing_5_2.png)
+![清单 5.2 热传感器 Verticle HTTP API 代码](Chapter5-BeyondCallbacks.assets/Listing_5_2.png)
 
 这是对 Vert.x HTTP 服务器的非常直接的使用，HTTP 端口通过配置传递。 响应以 JSON 编码。
 
@@ -55,7 +55,7 @@
 
 快照服务也公开了一个 HTTP 服务器，如下面的清单所示。
 
-![](Chapter5-BeyondCcallbacks.assets/Listing_5_3.png)
+![清单 5.3 快照服务verticle](Chapter5-BeyondCallbacks.assets/Listing_5_3.png)
 
 HTTP 请求处理程序需要一个 HTTP *POST* 请求，使用主体处理程序提取主体，并记录接收到的数据。
 
@@ -67,7 +67,7 @@ HTTP 请求处理程序需要一个 HTTP *POST* 请求，使用主体处理程�
 
 我们项目所需的依赖项是 *Vert.x Core*、*Vert.x Web Client*（用于简化 HTTP 请求）和 *Logback*。 以下清单显示了 Gradle 构建的依赖项。 使用 Maven 或任何其他兼容的构建工具时，工件完全相同。
 
-![](Chapter5-BeyondCcallbacks.assets/Listing_5_4.png)
+![清单 5.4 边缘服务依赖项（回调版本）](Chapter5-BeyondCallbacks.assets/Listing_5_4.png)
 
 >  **🏷注意:** 除了 *chapter5.future.CollectorService* 之外的所有类都在 Vert.x 3.9 上编译。 此类需要较新的基于 Vert.x 4 future的 API，如第 5.3.2 节中关于 Vert.x futures 和 promises 的部分所述。
 
@@ -75,39 +75,39 @@ HTTP 请求处理程序需要一个 HTTP *POST* 请求，使用主体处理程�
 
 我们将从 *CollectorService* verticle 类实现的序言开始。
 
-![](Chapter5-BeyondCcallbacks.assets/Listing_5_5.png)
+![清单 5.5 回调实现序言](Chapter5-BeyondCallbacks.assets/Listing_5_5.png)
 
 *start* 方法首先创建一个 *WebClient* 实例，然后在端口 8080 上启动一个 HTTP 服务器。Web 客户端类来自 *vertx-web-client* 模块，与 Vert.x 核心 API。 它特别简化了 HTTP 正文处理和转换：您可以将正文转换为纯文本、JSON 或通用的 Vert.x 缓冲区。
 
 HTTP 请求处理程序是以下清单中显示的 **handleRequest** 方法。
 
-![](Chapter5-BeyondCcallbacks.assets/Listing_5_6.png)
+![清单 5.6 带有回调的请求处理](Chapter5-BeyondCallbacks.assets/Listing_5_6.png)
 
 此方法显示使用 Web 客户端 API 执行 HTTP 请求是多么容易。 主要困难在于协调并行 HTTP 请求。 我们需要一个循环来发出请求，并且由于它们是异步的，我们还需要跟踪接收到的响应数量和响应值。 这是通过拥有一个响应列表并使用一个计数器进行响应来完成的。 请注意，我们在这里使用 *AtomicInteger* 不是因为并发性，而是因为我们需要一个对象来从回调中增加一个整数。
 
 收到所有响应后，我们可以进行下一个操作，即将数据发送到快照服务。
 
-![](Chapter5-BeyondCcallbacks.assets/Listing_5_7.png)
+![清单 5.7 发送数据到 snap](Chapter5-BeyondCallbacks.assets/Listing_5_7.png)
 
 此方法实现仅使用 Web 客户端发出 HTTP **POST** 请求。
 
 成功后，代码将移至 *sendResponse* 方法以结束 HTTP 请求，如下所示。
 
-![](Chapter5-BeyondCcallbacks.assets/Listing_5_8.png)
+![清单 5.8 发送响应](Chapter5-BeyondCallbacks.assets/Listing_5_8.png)
 
 ### 5.2.2 运行
 
 要运行边缘服务，我们首先需要部署 Verticle，如下面的清单所示。
 
-![](Chapter5-BeyondCcallbacks.assets/Listing_5_9.png)
+![清单 5.9 主要方法](Chapter5-BeyondCallbacks.assets/Listing_5_9.png)
 
 我们可以发出 HTTP 请求以使用 `HTTPie` 测试服务，如下所示。
 
-![](Chapter5-BeyondCcallbacks.assets/Listing_5_10.png)
+![清单 5.10 调用边缘服务](Chapter5-BeyondCallbacks.assets/Listing_5_10.png)
 
 在服务器端，我们可以检查快照服务是否输出了一些日志，如下面的清单所示。
 
-![](Chapter5-BeyondCcallbacks.assets/Listing_5_11.png)
+![清单 5.11 边缘服务的日志](Chapter5-BeyondCallbacks.assets/Listing_5_11.png)
 
 ### 5.2.3 “回调地狱”不是问题所在
 
@@ -117,7 +117,7 @@ HTTP 请求处理程序是以下清单中显示的 **handleRequest** 方法。
 
 下面的清单显示了与前面相同的代码，但压缩为带有嵌套回调的单个片段。
 
-![](Chapter5-BeyondCcallbacks.assets/Listing_5_12.png)
+![清单 5.12 带有嵌套回调的变体](Chapter5-BeyondCallbacks.assets/Listing_5_12.png)
 
 嵌套回调当然不会使代码更具可读性，但我认为真正的问题在于**功能代码**与**异步协调代码**纠缠在一起的事实。 您需要从循环、回调和分支中解读出三个 HTTP 请求是并行发出的，并且它们的结果正在组合、发送到第三方服务，然后作为响应返回。
 
@@ -139,19 +139,19 @@ promise保存了一些现在还没有值的计算的值。承诺最终会带着�
 
 Promise 是由一段即将执行异步操作的代码创建的。 例如，假设您要报告异步操作已完成，不是现在，而是在 5 秒内。 在 Vert.x 中，您将为此使用计时器，并使用 promise 来保存结果，如下面的清单所示。
 
-![](Chapter5-BeyondCcallbacks.assets/Listing_5_13.png)
+![清单 5.13 创建一个promise](Chapter5-BeyondCallbacks.assets/Listing_5_13.png)
 
 这里的异步操作是一个五秒的定时器，之后promise就完成了。 根据当前时间是奇数还是偶数，promise 以一个值完成或因异常而失败。 这很好，但我们如何真正从 Promise 中*get*值？
 
 想要在结果可用时做出反应的代码需要一个future对象。一个Vertx future是从一个promise创建的，然后传递给想要读取该值的代码，如下一个清单所示，即 **清单5.13** 的其余部分。
 
-![](Chapter5-BeyondCcallbacks.assets/Listing_5_14.png)
+![清单 5.14 从一个 Promise 中创建一个future](Chapter5-BeyondCallbacks.assets/Listing_5_14.png)
 
 *Future* 接口定义了两种方法，`onSuccess` 和 `onFailure`，用于处理值和错误。 当我们运行相应的代码时，我们会看到“Ok！” 或“Bad lucky...”在5秒后打印。
 
 我们可以使用Future执行更高级的异步操作，如下面的清单所示。
 
-![](Chapter5-BeyondCcallbacks.assets/Listing_5_15.png)
+![清单 5.15 高级future组合操作](Chapter5-BeyondCallbacks.assets/Listing_5_15.png)
 
 当 promise 失败时调用 `recover` 操作，它用于将错误替换为另一个值。 您可以将 `recover` 视为 Java 中的 `catch` 块的等价物，您可以在其中处理错误。 这里，我们只是使用一个成功的future提供一个恢复值，但是在更高级的情况下，当您无法进行恢复时，您也可以使用一个失败的future。
 
@@ -163,7 +163,7 @@ Vert.x 4 将 Future与回调一起引入核心 API。 虽然回调仍然是规�
 
 这意味着给定一个方法，`void doThis(Handler<AsyncResult<T>>)`，有一个形式为`Future<T> doThis()`的变体。 下面的清单显示了一个很好的示例，我们在其中启动了一个 HTTP 服务器。
 
-![](Chapter5-BeyondCcallbacks.assets/Listing_5_16.png)
+![清单 5.16 使用future方法启动 HTTP 服务器](Chapter5-BeyondCallbacks.assets/Listing_5_16.png)
 
 我们在前面的例子中看到的 listen 方法接受一个回调接口`Handler<AsyncResult<HttpServer>>`，但是在这里它返回一个 `Future<HttpServer>`。 然后，我们可以链接调用 `onFailure` 和 `onSuccess` 来定义服务器启动或发生错误时要做什么。
 
@@ -179,13 +179,13 @@ Vert.x futures 还可以与 JDK 中的 `java.util.concurrent` 包的 *Completion
 
 以下清单显示了我们如何从 Vert.x Future 迁移到 *CompletionStage*。
 
-![](Chapter5-BeyondCcallbacks.assets/Listing_5_17.png)
+![清单 5.17 从 Vert.x Future 到 CompletionStage](Chapter5-BeyondCallbacks.assets/Listing_5_17.png)
 
 这里我们将字符串结果转换为大写，在它前面加上一个字符串，最终调用了*whenComplete*。 请注意，这是一个 *BiConsumer*，需要测试哪些值或异常参数为 *null*，才能知道 promise 是否成功完成。 同样重要的是要注意，除非您调用异步的 *CompletionStage* 方法，否则调用将在 Vert.x 线程上执行。
 
 最后但同样重要的是，您也可以将 *CompletionStage* 转换为 Vert.x 的 *Future*，如下所示。
 
-![](Chapter5-BeyondCcallbacks.assets/Listing_5_18.png)
+![清单 5.18 从 CompletionStage 到 Vert.x Future](Chapter5-BeyondCallbacks.assets/Listing_5_18.png)
 
 *CompletableFuture* 实现了 *CompletionStage*接口，而 *supplyAsync* 调度了对默认 *ForkJoinPool* 的调用。 将使用该线程池中的一个线程，在返回一个字符串之前休眠5秒钟，该字符串将是 *CompletableFuture* 结果。*fromCompletionStage* 方法转换为 Vert.x *Future*。 该方法有两种变体：一种具有 Vert.x 上下文，用于在上下文上调用 *Future* 方法，如*onSuccess*，另一种调用将发生在完成提供的*CompletionStage* 实例的任何线程上。
 
@@ -195,19 +195,19 @@ Vert.x futures 还可以与 JDK 中的 `java.util.concurrent` 包的 *Completion
 
 首先，我们可以在下面的清单中定义 *fetchTemperature* 方法来从服务中获取温度。
 
-![](Chapter5-BeyondCcallbacks.assets/Listing_5_19.png)
+![清单 5.19 使用基于future的 API 获取温度](Chapter5-BeyondCallbacks.assets/Listing_5_19.png)
 
 该方法返回一个值是JsonObject的future对象，为了实现这一点，我们使用`WebClient HttpRequest send`方法返回future，然后映射结果以仅提取JSON数据。
 
 在接下来显示的 *handleRequest* 方法中收集温度。
 
-![](Chapter5-BeyondCcallbacks.assets/Listing_5_20.png)
+![清单 5.20 使用基于future的 API 收集温度](Chapter5-BeyondCallbacks.assets/Listing_5_20.png)
 
 你可以使用*CompositeFuture*将多个future组合成一个。`all`静态方法的结果是，当所有的future完成时，该future会完成，当任何future失败时，该future会失败。还有具有不同语义的`any`和`join`方法。
 
 一旦成功接收到所有温度，对`flatMap`的调用将数据发送到快照服务，这是一个异步操作。 *sendToSnapshot* 方法的代码显示在以下清单中。
 
-![](Chapter5-BeyondCcallbacks.assets/Listing_5_21.png)
+![清单 5.21 使用基于future的 API 将数据发送到快照服务](Chapter5-BeyondCallbacks.assets/Listing_5_21.png)
 
 这段代码与 *fetchTemperature* 的代码类似，因为我们使用 *WebClient* 的方法返回 *Future*。 部署 Verticle 的 main 方法的代码与回调变体中的代码相同，只是我们部署了一个不同的 *CollectorService* verticle：
 
@@ -257,9 +257,9 @@ Vert.x 为 RxJava 版本 1 和 2 提供绑定。建议使用版本 2，因为它
 
 我们将从**清单 5.22** 中的简单示例开始，如**图 5.3** 所示。
 
-![](Chapter5-BeyondCcallbacks.assets/Figure_5_3.png)
+![图 5.3 清单 5.22 的 RxJava 管道](Chapter5-BeyondCallbacks.assets/Figure_5_3.png)
 
-![](Chapter5-BeyondCcallbacks.assets/Listing_5_22.png)
+![清单 5.22 第一个 RxJava 示例](Chapter5-BeyondCallbacks.assets/Listing_5_22.png)
 
 运行**清单5.22** 中的代码会得到如下控制台输出:
 
@@ -273,7 +273,7 @@ Vert.x 为 RxJava 版本 1 和 2 提供绑定。建议使用版本 2，因为它
 
 源可能会发出错误，在这种情况下可以通知订阅者。 考虑以下清单中的 observable。
 
-![](Chapter5-BeyondCcallbacks.assets/Listing_5_23.png)
+![清单 5.23 使用 RxJava 处理错误](Chapter5-BeyondCallbacks.assets/Listing_5_23.png)
 
 可观察的字符串值将发出一个错误。 map 运算符永远不会被调用，因为它只对值进行操作，而不是对错误进行操作。 我们可以看到 *subscribe* 现在有两个参数； 第二个是处理错误的回调。 在这个例子中，我们只打印堆栈跟踪，但在网络应用程序中，例如，我们会进行错误恢复。
 
@@ -285,11 +285,11 @@ Vert.x 为 RxJava 版本 1 和 2 提供绑定。建议使用版本 2，因为它
 
 让我们看一个更详细的例子。
 
-![](Chapter5-BeyondCcallbacks.assets/Listing_5_24.png)
+![清单 5.24 在 RxJava 中处理所有生命周期事件](Chapter5-BeyondCallbacks.assets/Listing_5_24.png)
 
-Running the preceding code gives the following output.
+运行前面的代码会给出以下输出。
 
-![](Chapter5-BeyondCcallbacks.assets/Listing_5_25.png)
+![清单 5.25 运行清单 5.24 的输出](Chapter5-BeyondCallbacks.assets/Listing_5_25.png)
 
 此示例向我们展示了 *subscribe* 的形式，其中可以处理所有事件：事件、错误和流的完成。 该示例还显示了更多运算符：
   - *doOnSubscribe* 和 *doOnNext* 是可以在项目沿流传递时触发的操作（具有潜在的副作用）。
@@ -322,7 +322,7 @@ RxJava API 位于 *io.vertx.reactivex* 的子包中。 例如，*AbstractVerticl
 
 让我们看一个使用 RxJava API 的示例 Verticle。
 
-![](Chapter5-BeyondCcallbacks.assets/Listing_5_26.png)
+![清单 5.26 RxJava 和 Vert.x API](Chapter5-BeyondCallbacks.assets/Listing_5_26.png)
 
 这个例子打开了一个经典的 HTTP 服务器，它对任何请求都回复 *Ok*。 有趣的部分是*AbstractVerticle* 的RxJava 变体有一个*rxStart*（和*rxStop*）方法来通知部署成功。 在我们的例子中，当 HTTP 服务器启动时，verticle 已经成功部署，所以我们返回一个 *Completable* 对象。 您可以检查以 *rx* 为前缀的方法是否对应于生成的支持 RxJava 的方法。 如果您检查 RxJava API，您会注意到原始方法（包括回调）仍然存在。
 
@@ -334,17 +334,17 @@ RxJava API 位于 *io.vertx.reactivex* 的子包中。 例如，*AbstractVerticl
 
 首先，我们将更新导入以使用 `io.vertx.reactivex.*` 包。 由于 Verticle 启动了一个 HTTP 服务器，我们可以利用 *rxStart* 如下。
 
-![](Chapter5-BeyondCcallbacks.assets/Listing_5_27.png)
+![清单 5.27 RxJava 收集器服务序言](Chapter5-BeyondCallbacks.assets/Listing_5_27.png)
 
 下一步是编写一个并行获取温度的方法，然后将响应组装为 JSON 对象。 就像回调版本一样，我们可以有一个获取单个温度的方法。 代码显示在以下清单中。
 
-![](Chapter5-BeyondCcallbacks.assets/Listing_5_28.png)
+![清单 5.28 使用 RxJava 获取温度](Chapter5-BeyondCallbacks.assets/Listing_5_28.png)
 
 同样，与回调版本的区别在于我们使用 *rxSend*（返回 *Single*）而不是 send（使用回调）。
 
 下一个清单显示了一种组合并行异步 HTTP 请求并根据响应组装 JSON 对象的方法。
 
-![](Chapter5-BeyondCcallbacks.assets/Listing_5_29.png)
+![清单 5.29 使用 RxJava 收集温度请求](Chapter5-BeyondCallbacks.assets/Listing_5_29.png)
 
 通过使用 *fetchTemperature* 来获取单个响应，我们获得了观察单个 HTTP 响应的 *Single* 对象。 为了组合结果，我们使用 *zip* 运算符，它采用可分割的源并将结果组合为另一个 *Single* 对象。 当所有 HTTP 响应都可用时，*zip* 运算符将值传递给必须产生值（任何类型）的函数。 然后返回的值是 *zip* 运算符发出的 *Single* 对象。 在这里，我们使用 Vert.x Web 客户端为我们转换为 JSON 的 HTTP 响应主体构建了一个 JSON 数组，然后我们将数组包装在一个 JSON 对象中。
 
@@ -352,13 +352,13 @@ RxJava API 位于 *io.vertx.reactivex* 的子包中。 例如，*AbstractVerticl
 
 这导致我们定义了 HTTP 请求处理方法，该方法收集温度，发布到快照服务，然后响应请求者。 代码在以下清单中。
 
-![](Chapter5-BeyondCcallbacks.assets/Listing_5_30.png)
+![清单 5.30 RxJava 收集器服务 HTTP 处理程序](Chapter5-BeyondCallbacks.assets/Listing_5_30.png)
 
 此方法还执行订阅：成功时将 JSON 数据返回给请求者，失败时返回 HTTP 500 错误。 需要注意的是，订阅会触发对传感器服务的 HTTP 请求，然后是对快照服务的请求，依此类推。 在进行订阅之前，RxJava 可观察管道只是处理事件的“配方”。
 
 最后缺少的部分是向快照服务发送数据的方法。
 
-![](Chapter5-BeyondCcallbacks.assets/Listing_5_31.png)
+![清单 5.31 使用 RxJava 向快照服务发送数据](Chapter5-BeyondCallbacks.assets/Listing_5_31.png)
 
 该方法引入了函数式编程爱好者所熟知的 *flatMap* 运算符。 如果 *flatMap* 对您来说听起来很神秘，请不要担心； 在组合顺序异步操作的情况下，您可以将“flatmap”读为“and then(然后)”。
 
@@ -396,13 +396,13 @@ vertx.deployVerticle("chapter5.reactivex.CollectorService");
 
 为了让事情更具体，让我们看看在 Kotlin 中使用协程。 首先，考虑以下代码。
 
-![](Chapter5-BeyondCcallbacks.assets/Listing_5_32.png)
+![清单 5.32 协程 hello world](Chapter5-BeyondCallbacks.assets/Listing_5_32.png)
 
 对 *delay* 的调用不会阻塞调用者线程，因为可以挂起该方法。 时间过去后再次调用该方法，并在下一行继续执行，该行返回一个字符串。 在回调世界中，*delay* 函数将采用回调参数，该参数必须将返回的字符串传递给调用者，可能使用另一个回调。
 
 这是一个更详细的示例。
 
-![](Chapter5-BeyondCcallbacks.assets/Listing_5_33.png)
+![清单 5.33 协程示例](Chapter5-BeyondCallbacks.assets/Listing_5_33.png)
 
 在这个例子中，*job1* 是使用 *launch* 创建的，它并行执行一些代码。 它等待 500 毫秒。 这同样适用于 *job2*，除了 *async* 用于返回值的代码块。 它计算 42 的斐波那契值，这需要一些时间。 job上的 *join* 和 *await* 方法允许我们等待这些job完成。 最后但同样重要的是，*main* 函数包含在 *runBlocking* 调用中。 这是因为挂起的方法正在被调用，所以执行必须等待所有协程完成。
 
@@ -412,7 +412,7 @@ vertx.deployVerticle("chapter5.reactivex.CollectorService");
 
 Vert.x 为 Kotlin 协程提供一流的支持。 要在 Gradle 项目中使用它们，您需要以下清单中显示的依赖项和配置。
 
-![](Chapter5-BeyondCcallbacks.assets/Listing_5_34.png)
+![清单 5.34 Vert.x Kotlin 协程依赖和配置摘录](Chapter5-BeyondCallbacks.assets/Listing_5_34.png)
 
 同样，协程绑定是从回调 API 生成的。 约定是，对于任何具有回调的方法，都会生成带有后缀 *Await* 的 Kotlin 挂起方法。 给定
 
@@ -434,19 +434,19 @@ suspend fun String fooAwait(String s)
 
 让我们看看使用Kotlin协程的边缘服务的实现。序言如下清单所示。
 
-![](Chapter5-BeyondCcallbacks.assets/Listing_5_35.png)
+![清单 5.35 协程收集器服务序言](Chapter5-BeyondCallbacks.assets/Listing_5_35.png)
 
 与其他实现相比，除了 *start* 方法是挂起，HTTP 服务器是使用 *listenAwait* 启动之外，没有太大区别。 由于该方法调用处于挂起状态，因此在 HTTP 服务器运行时继续执行，并且该方法返回 HTTP 服务器实例，我们在这里简单地忽略它。
 
 下一个清单显示了适用于协程的 *fetchTemperature* 和 *sendToSnapshot* 方法的代码。
 
-![](Chapter5-BeyondCcallbacks.assets/Listing_5_36.png)
+![清单 5.36 HTTP 请求和协程](Chapter5-BeyondCallbacks.assets/Listing_5_36.png)
 
 这两种方法现在看起来更像是更经典的命令式代码。 *fetchTemperature* 返回一个值（一个 JSON 对象），尽管是异步的，因为在调用 *sendAwait* 时方法中的执行被暂停。
 
 “看起来不像异步操作的异步操作”的错觉在下面的清单中更加明显，其中包含边缘服务的核心逻辑。
 
-![](Chapter5-BeyondCcallbacks.assets/Listing_5_37.png)
+![清单 5.37 协程收集器 HTTP 处理程序](Chapter5-BeyondCallbacks.assets/Listing_5_37.png)
 
 这段代码非常自然地表达了温度是异步获取的，它们的值被收集在一个 JSON 对象中，调用快照服务，最终将结果发送给请求者。 尽管如此，异步操作仍有许多暂停点。 此外，错误管理是一个熟悉的 *try/catch* 结构。
 
