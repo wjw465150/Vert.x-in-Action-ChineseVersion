@@ -1,4 +1,4 @@
-# 第九章: Messaging and event streaming with Vert.x
+# 第九章: Vert.x 的消息传递和事件流
 
 > 翻译: 白石(https://github.com/wjw465150/Vert.x-in-Action-ChineseVersion)
 

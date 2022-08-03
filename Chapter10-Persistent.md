@@ -1,4 +1,4 @@
-# 第十章: Persistent state management with databases
+# 第十章: 使用数据库进行持久状态管理
 
 > 翻译: 白石(https://github.com/wjw465150/Vert.x-in-Action-ChineseVersion)
 

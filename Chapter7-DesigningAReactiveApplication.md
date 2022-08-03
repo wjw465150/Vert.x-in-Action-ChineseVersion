@@ -33,7 +33,7 @@
 
 我们将在接下来的章节中实现的应用程序支持一个(不那么)虚构的健身追踪器挑战。假设我们想要构建一个应用程序来跟踪和记录用户的步骤，如**图7.1**所示。
 
-![](Chapter7-DesigningAReactiveApplication.assets/Figure_7_1.png)
+![图 7.1 1万步挑战应用程序和参与者概述](Chapter7-DesigningAReactiveApplication.assets/Figure_7_1.png)
 
 **图7.1**中描述的应用程序如下：
 
@@ -45,13 +45,13 @@
 
 这个web应用程序允许新用户通过提供他们的设备标识符和一些基本信息来注册，比如他们的城市以及他们是否打算出现在公共排名中(**图7.2**)。
 
-![](Chapter7-DesigningAReactiveApplication.assets/Figure_7_2.png)
+![图 7.2 用户 Web 应用程序注册表截图](Chapter7-DesigningAReactiveApplication.assets/Figure_7_2.png)
 
 一旦连接上，用户就可以更新一些基本的细节，并获得总步数、月步数和每日步数的提醒(**图7.3**)。
 
-![](Chapter7-DesigningAReactiveApplication.assets/Figure_7_3.png)
+![图 7.3 用户 Web 应用程序用户详细信息页面的屏幕截图](Chapter7-DesigningAReactiveApplication.assets/Figure_7_3.png)
 
-![](Chapter7-DesigningAReactiveApplication.assets/Figure_7_4.png)
+![图 7.4 公共仪表板 Web 应用程序的屏幕截图](Chapter7-DesigningAReactiveApplication.assets/Figure_7_4.png)
 
 还有一个单独的web应用程序提供了一个公共仪表板(**图7.4**)。
 
@@ -61,7 +61,7 @@
 
 应用程序被分解为一组相互交互的(微)服务，如**图7.5**所示。每个服务都实现单一的功能目的，并且可以被其他应用程序很好地使用。有四个公共服务:两个面向用户的web应用程序，一个用于接收计步器设备更新的服务，以及一个用于公开公共HTTP API的服务。用户web应用程序使用公共API，我们同样可以让移动应用程序连接到它。有四个内部服务:一个管理用户配置文件，一个管理活动数据，一个通过电子邮件祝贺用户，一个计算连续事件的各种统计数据。
 
-![](Chapter7-DesigningAReactiveApplication.assets/Figure_7_5.png)
+![图 7.5 应用架构概览](Chapter7-DesigningAReactiveApplication.assets/Figure_7_5.png)
 
 > **🏷注意:** 您可能已经听说过 *命令查询责任隔离 *（CQRS）和 *事件源 *，这是在事件驱动的架构中发现的模式。 CQRS结构如何读取和写入信息，而事件来源是关于将应用程序状态物化为事实序列的。 我们提出的应用程序体系结构与这两个概念都有关，但由于它不严格地符合定义，所以我更喜欢称它为“事件驱动的微服务体系结构”。
 
@@ -71,7 +71,7 @@
 
 如**图7.6**所示，我们可以通过查看设备更新如何影响仪表板Web应用程序的城市趋势排名来说明服务之间的交互示例。
 
-![](Chapter7-DesigningAReactiveApplication.assets/Figure_7_6.png)
+![图 7.6 从设备更新到城市趋势更新](Chapter7-DesigningAReactiveApplication.assets/Figure_7_6.png)
 
 首先，计步器向摄取服务发送更新，摄取服务验证更新是否包含所有需要的数据。然后，摄取服务将更新发送到Kafka主题，计步器设备被确认，因此它知道已经收到更新并将被处理。这个更新将由多个侦听特定Kafka主题的消费者来处理，其中包括活动服务。这个服务将记录数据到PostgreSQL数据库，然后发布另一条记录到Kafka主题的计步器记录的步数在那天。该记录由事件统计服务获取，该服务观察窗口上5秒内的更新，按城市划分更新，并汇总步骤数。然后，它发布一个更新，将一个给定城市观察到的步骤的增量作为另一个Kafka记录。这个记录随后被仪表板web应用程序使用，它最终向所有连接的web浏览器发送一个更新，从而更新显示。
 
@@ -103,7 +103,7 @@
 
 该服务公开一个HTTP API并持久化MongoDB数据库中的数据(参见**图7.7**)。
 
-![](Chapter7-DesigningAReactiveApplication.assets/Figure_7_7.png)
+![图 7.7 用户档案服务](Chapter7-DesigningAReactiveApplication.assets/Figure_7_7.png)
 
 该服务属于**CRUD**(用于*创建*、*读取*、*更新*和*删除*)服务的类别，它们位于数据库之上。**表7.1**标识了HTTP API的不同元素。
 
@@ -132,7 +132,7 @@
   - 一个同步标识符，它是一个单调递增的长整数，每次成功同步设备都会更新它
   - 自上次同步以来的步数
 
-![](Chapter7-DesigningAReactiveApplication.assets/Figure_7_8.png)
+![图 7.8 摄取服务](Chapter7-DesigningAReactiveApplication.assets/Figure_7_8.png)
 
 HTTP API支持单个操作，如**表7.2**所示。
 
@@ -156,7 +156,7 @@ AMQP和HTTP客户端只有在记录写入Kafka时才会得到确认。在使用H
 
 **活动服务**还发布带有设备当天步数的事件。通过这种方式，其他服务可以订阅相应的Kafka主题并得到通知，而不必定期轮询活动服务的更新。
 
-![](Chapter7-DesigningAReactiveApplication.assets/Figure_7_9.png)
+![图 7.9 活动服务](Chapter7-DesigningAReactiveApplication.assets/Figure_7_9.png)
 
 HTTP API如表7.3所示。
 
@@ -171,7 +171,7 @@ HTTP API如表7.3所示。
 
 大多数操作是对给定设备的查询。正如你将在另一章中看到的，最后一个操作提供了一个获取设备排名的有效查询，这在仪表板服务启动时非常有用。
 
-发送到 *daily.step.updates* kafka主题的事件包含以下信息：
+发送到 `daily.step.updates` kafka主题的事件包含以下信息：
   - 设备标识符
   - 时间戳
   - 当天记录的步数
@@ -193,7 +193,7 @@ HTTP API如表7.3所示。
 
 此服务公开一个公共HTTP API供其他服务使用。它本质上充当用户配置文件和活动服务的“外观”，如**图7.10**所示。
 
-![](Chapter7-DesigningAReactiveApplication.assets/Figure_7_10.png)
+![图 7.10 公共 API](Chapter7-DesigningAReactiveApplication.assets/Figure_7_10.png)
 
 该服务是一种**边缘服务**或**API网关**的形式，因为它转发和组合请求给其他服务。由于这是一个公共HTTP API，服务的大多数操作都需要身份验证。为了做到这一点，我们将使用*JSON web令牌* (https://tools.ietf.org/html/rfc7519)，我们将在第8章与服务实现一起讨论。因为我们希望公共API可以从任何HTTP客户端使用，包括运行在web浏览器中的JavaScript代码，我们需要支持*跨源资源共享*，或CORS (https://fetch.spec.whatwg.org/#http-cors-protocol)。我们将在适当的时候再次深入研究细节。HTTP API操作如**表7.4**所示。
 
@@ -217,7 +217,7 @@ HTTP API如表7.3所示。
 
 用户web应用程序为用户提供了一种方式来注册、更新他们的详细信息，并检查有关他们活动的一些基本数据。如**图7.11**所示，有一个后端通过HTTP将web应用程序的静态资源提供给web浏览器。
 
-![](Chapter7-DesigningAReactiveApplication.assets/Figure_7_11.png)
+![图 7.11 用户网页应用](Chapter7-DesigningAReactiveApplication.assets/Figure_7_11.png)
 
 前端是一个用JavaScript和Vue.JS框架编写的单页应用程序。它由用户web应用程序服务提供，所有与应用程序后端的交互都通过调用公共API服务发生。
 
@@ -229,7 +229,7 @@ HTTP API如表7.3所示。
 
 事件统计服务对Kafka主题中的选定事件做出反应，生成统计信息，并将其作为Kafka记录发布，供其他服务使用，如**图7.12**所示。
 
-![](Chapter7-DesigningAReactiveApplication.assets/Figure_7_12.png)
+![图 7.12 事件统计服务](Chapter7-DesigningAReactiveApplication.assets/Figure_7_12.png)
 
 该服务执行以下计算：
   - 基于 5 秒的时间窗口，它根据在 *incoming.steps* 主题上接收到的事件数计算设备更新的吞吐量，然后向 *event-stats.throughput* 主题发出一条记录。
@@ -244,7 +244,7 @@ Kafka 记录可以批量自动确认，因为再次处理记录几乎没有危�
 
 祝贺服务的作用是监控设备每天何时达到至少10,000步，然后向所有者发送祝贺邮件，如图7.13所示。
 
-![](Chapter7-DesigningAReactiveApplication.assets/Figure_7_13.png)
+![图 7.13 恭喜服务](Chapter7-DesigningAReactiveApplication.assets/Figure_7_13.png)
 
 该服务调用用户配置文件服务来获取与设备关联的用户的电子邮件，然后联系SMTP服务器发送电子邮件。
 
@@ -256,7 +256,7 @@ Kafka 记录可以批量自动确认，因为再次处理记录几乎没有危�
 
 仪表板web应用程序提供关于传入更新吞吐量、城市趋势和公共用户排名的实时更新。如**图7.14**所示，该服务使用事件统计服务发出的Kafka记录，并定期向web应用程序推送更新。
 
-![](Chapter7-DesigningAReactiveApplication.assets/Figure_7_14.png)
+![图 7.14 仪表板 Web 应用程序](Chapter7-DesigningAReactiveApplication.assets/Figure_7_14.png)
 
 web应用程序是使用Vue.JS框架编写的，就像前面描述的用户web应用程序一样。前端和后端使用Vert.x事件总线连接，因此Vert.x和Vue.JS代码库可以使用相同的编程模型进行通信。
 
@@ -307,7 +307,7 @@ Foreman还可以从Procfile中生成各种系统服务描述符:initab、launchd
 
 下一章将通过构建一组（不完美！）微服务来说明实现反应式应用程序的挑战，这些微服务涵盖了 Web、API、消息传递、数据和连续流处理等主题。 在下一章中，我们将探索用于实现本章中描述的一些服务的 Web 栈。
 
-![](Chapter7-DesigningAReactiveApplication.assets/Figure_7_15.png)
+![图 7.15 使用 Docker Compose 和 Foreman 运行微服务和基础设施服务](Chapter7-DesigningAReactiveApplication.assets/Figure_7_15.png)
 
 ## 总结
   - 反应式应用程序专注于控制各种工作负载下的延迟以及其他服务出现故障的情况。

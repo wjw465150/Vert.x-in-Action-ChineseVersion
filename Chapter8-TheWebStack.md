@@ -1,4 +1,4 @@
-# 第八章: The Web Stack
+# 第八章: Web 栈
 
 > 翻译: 白石(https://github.com/wjw465150/Vert.x-in-Action-ChineseVersion)
 
@@ -17,7 +17,7 @@
 
 让我们从提醒一下公共 API 服务的作用开始，**如图 8.1** 所示。 该服务是一个边缘服务（或服务网关，取决于您喜欢如何命名它），因为它公开了一个 HTTP API，但它本质上构成了其他服务中的功能。 在这种情况下，正在使用*用户配置文件服务* 和 *活动服务*。 这两个服务在应用程序内部，不公开。 它们还缺乏任何形式的身份验证和访问控制，这是大多数操作公共 API 无法承受的。
 
-![](Chapter8-TheWebStack.assets/Figure_8_1.png)
+![图 8.1 公共 API 概览](Chapter8-TheWebStack.assets/Figure_8_1.png)
 
 实现公共 API 需要以下 Vert.x 模块：
   - **vertx-web**, 提供高级 HTTP 请求处理功能
@@ -34,21 +34,21 @@ Vert.x 核心提供了一个非常底层的 HTTP 服务器 API，您需要在其
 
 *vertx-web* 模块提供了一个 *router*，它可以充当 Vert.x HTTP 服务器请求处理程序，并根据请求路径（例如，*/foo*）和 HTTP 管理将 HTTP 请求分派到合适的处理程序方法（例如，POST）。 如**图 8.2** 所示。
 
-![](Chapter8-TheWebStack.assets/Figure_8_2.png)
+![图 8.2 路由 HTTP 请求](Chapter8-TheWebStack.assets/Figure_8_2.png)
 
 以下清单显示了如何初始化路由器并将其设置为 HTTP 请求处理程序。
 
-![](Chapter8-TheWebStack.assets/Listing_8_1.png)
+![清单 8.1 初始化和使用路由器作为 HTTP 请求处理程序](Chapter8-TheWebStack.assets/Listing_8_1.png)
 
 **Router** 类提供了一个流畅的 API 来描述基于 HTTP 方法和路径的路由，如下面的清单所示。
 
-![](Chapter8-TheWebStack.assets/Listing_8_2.png)
+![清单 8.2 定义路由](Chapter8-TheWebStack.assets/Listing_8_2.png)
 
 Vert.x 路由器的一个有趣特性是可以链接处理程序。 使用**清单 8.2** 中的定义，对 `/api/v1/register` 的 *POST* 请求首先通过 *BodyHandler* 实例。 此处理程序对于轻松解码 HTTP 请求正文有效负载很有用。 下一个处理程序是 *register* 方法。
 
 **清单 8.2** 还定义了 *GET* 请求到 *monthlySteps* 的路由，其中请求首先通过 *jwtHandler*，然后是 *checkUser*，如图 8.3 所示。 这对于分解 HTTP 请求很有用，分几个步骤处理问题：*jwtHandler* 检查请求中是否包含有效的 JWT 令牌，*checkUser* 检查 JWT 令牌是否授予访问资源的权限，*monthlySteps* 检查用户在一个月内走了多少步。
 
-![](Chapter8-TheWebStack.assets/Figure_8_3.png)
+![图 8.3 月度步数端点的路由链](Chapter8-TheWebStack.assets/Figure_8_3.png)
 
 请注意，checkUser 和 jwtHandler 都将在8.2 节中讨论。
 
@@ -68,7 +68,7 @@ WebClient webClient = WebClient.create(vertx);
 
 以下清单显示了 *register* 路由处理程序的实现。
 
-![](Chapter8-TheWebStack.assets/Listing_8_3.png)
+![清单 8.3 在路由处理程序中使用 Vert.x Web 客户端](Chapter8-TheWebStack.assets/Listing_8_3.png)
 
 此示例演示如何使用路由器处理 HTTP 请求，以及如何使用 Web 客户端。 *RoutingContext* 类封装有关 HTTP 请求的详细信息，并通过 *response* 方法提供 HTTP 响应对象。 可以在请求和响应中设置 HTTP 标头，并且在调用 *end* 方法后发送响应。 可以指定状态码，但默认为 200（OK）。
 
@@ -76,7 +76,7 @@ WebClient webClient = WebClient.create(vertx);
 
 下一个清单为对 `/api/v1/:username` 的 HTTP GET 请求提供了另一种路由器处理程序方法，其中 `:username` 是一个路径参数。
 
-![](Chapter8-TheWebStack.assets/Listing_8_4.png)
+![清单 8.4 获取和转发用户的详细信息](Chapter8-TheWebStack.assets/Listing_8_4.png)
 
 此示例显示了 **as** 方法，该方法使用 *BodyCodec* 将 HTTP 响应转换为 *Buffer* 以外的类型。 您还可以看到 HTTP 响应的 *end* 方法可以接受一个作为响应内容的参数。 它可以是 *String* 或 *Buffer*。 虽然通常在单个结束方法调用中发送响应，但您可以使用 *write* 方法发送中间片段，直到最终结束调用关闭 HTTP 响应，如下所示：
 
@@ -96,17 +96,17 @@ JSON Web Token (JWT) 是用于在各方之间安全传输 JSON 编码数据的�
 
 为了说明如何使用 JWT 令牌，让我们与公共 API 交互并以用户 *foo* 的身份使用密码 *123* 进行身份验证，并获取 JWT 令牌。 以下清单显示了 HTTP 响应。
 
-![](Chapter8-TheWebStack.assets/Listing_8_5.png)
+![清单 8.5 获取 JWT 令牌](Chapter8-TheWebStack.assets/Listing_8_5.png)
 
 JWT 令牌的 MIME 类型为 *application/jwt*，它是纯文本。 我们可以通过令牌发出请求，如下所示。
 
-![](Chapter8-TheWebStack.assets/Listing_8_6.png)
+![清单 8.6 使用 JWT 令牌访问资源](Chapter8-TheWebStack.assets/Listing_8_6.png)
 
 > **💡提示:** 令牌值放在一行中，*Bearer* 和令牌之间只有一个空格。
 
 令牌与 *Authorization* HTTP 标头一起传递，并且值以 *Bearer* 为前缀。 这里令牌允许我们访问资源 `/api/v1/foo`，因为令牌是为用户 *foo* 生成的。 如果我们尝试在没有令牌的情况下做同样的事情，或者如果我们尝试访问另一个用户的资源，如下面的清单所示，我们会被拒绝。
 
-![](Chapter8-TheWebStack.assets/Listing_8_7.png)
+![清单 8.7 访问没有匹配 JWT 令牌的资源](Chapter8-TheWebStack.assets/Listing_8_7.png)
 
 ### 8.2.2 JWT 令牌中有什么？
 
@@ -148,7 +148,7 @@ JWT 令牌的 MIME 类型为 *application/jwt*，它是纯文本。 我们可以
 
 为了发行和检查令牌，我们需要的第一件事是一对公钥和私钥 RSA 密钥，因此我们可以签署 JWT 令牌。 您可以使用以下清单中的 shell 脚本生成这些。
 
-![](Chapter8-TheWebStack.assets/Listing_8_8.png)
+![清单 8.8 生成 RSA 2048 公钥和私钥](Chapter8-TheWebStack.assets/Listing_8_8.png)
 
 ```bash
 #!/bin/bash
@@ -159,31 +159,31 @@ openssl rsa -in private.pem -outform PEM -pubout -out public_key.pem
 
 下一个清单显示了一个帮助类，用于将 PEM 文件作为字符串读取。
 
-![](Chapter8-TheWebStack.assets/Listing_8_9.png)
+![清单 8.9 读取 RSA 密钥的助手](Chapter8-TheWebStack.assets/Listing_8_9.png)
 
 请注意，*CryptoHelper* 中的代码使用阻塞 API。 由于此代码在初始化时运行一次，并且 PEM 文件很小，因此我们可以承受可能但可以忽略不计的事件循环阻塞。
 
 然后我们可以创建一个 Vert.x JWT 处理程序，如下所示。
 
-![](Chapter8-TheWebStack.assets/Listing_8_10.png)
+![清单 8.10 创建一个 JWT 处理程序](Chapter8-TheWebStack.assets/Listing_8_10.png)
 
 JWT 处理程序可用于需要 JWT 身份验证的路由，因为它解码 *Authorization* 标头以提取 JWT 数据。
 
 下面的清单在它的处理程序链中调用了一个带有JWT处理程序的路由。
 
-![](Chapter8-TheWebStack.assets/Listing_8_11.png)
+![清单 8.11 路由中的 JWT 处理程序](Chapter8-TheWebStack.assets/Listing_8_11.png)
 
 JWT 处理程序支持来自 *vertx-auth-common* 模块的通用身份验证 API，它提供跨不同类型身份验证机制（如数据库、OAuth 或 Apache *.htdigest* 文件）的统一视图。 处理程序将身份验证数据放入路由上下文中。
 
 下面的清单显示了 *checkUser* 方法的实现，我们检查 JWT 令牌中的用户是否与 HTTP 请求路径中的用户相同。
 
-![](Chapter8-TheWebStack.assets/Listing_8_12.png)
+![清单 8.12 检查是否存在有效的 JWT 令牌](Chapter8-TheWebStack.assets/Listing_8_12.png)
 
 这提供了一个简单的关注点分离，因为 *checkUser* 处理程序专注于访问控制，并通过在授予访问权限时调用 next 委托给链中的 *next* 处理程序，或者如果错误用户以 403 状态码结束请求 正在尝试访问资源。
 
 知道访问控制是正确的，下面清单中的 *monthlySteps* 方法可以专注于向活动服务发出请求。
 
-![](Chapter8-TheWebStack.assets/Listing_8_13.png)
+![清单 8.13 获取每月步数数据](Chapter8-TheWebStack.assets/Listing_8_13.png)
 
 设备标识符从 JWT 令牌数据中提取并传递给 Web 客户端请求。
 
@@ -193,17 +193,17 @@ JWT 处理程序支持来自 *vertx-auth-common* 模块的通用身份验证 API
 
 以下清单显示了 */api/v1/token* 路由的处理程序。
 
-![](Chapter8-TheWebStack.assets/Listing_8_14.png)
+![清单 8.14 JWT 令牌创建路由器处理程序](Chapter8-TheWebStack.assets/Listing_8_14.png)
 
 这是一个典型的 RxJava 异步操作组合，使用 *flatMap* 来链接请求。 您还可以看到 Vert.x 路由器的声明式 API，我们可以在其中指定我们希望第一个请求成功。
 
 以下清单显示了 *fetchUserDetails* 的实现，它在身份验证请求成功后获取用户配置文件数据。
 
-![](Chapter8-TheWebStack.assets/Listing_8_15.png)
+![清单 8.15 获取用户详细信息](Chapter8-TheWebStack.assets/Listing_8_15.png)
 
 最后，下一个清单显示了如何准备 JWT 令牌。
 
-![](Chapter8-TheWebStack.assets/Listing_8_16.png)
+![清单 8.16 准备一个 JWT 令牌](Chapter8-TheWebStack.assets/Listing_8_16.png)
 
 *JWTOptions* 类为 JWT RFC 中的常见声明提供方法，例如颁发者、到期日期和主题。 您可以看到我们没有指定令牌的发布时间，尽管在 *JWTOptions* 中有一个方法。 *jwtAuth* 对象在这里做了正确的事情并代表我们添加它。
 
@@ -226,7 +226,7 @@ Web 浏览器强制执行安全策略，其中包括*同源策略*。 假设我�
 
 根据跨域 HTTP 请求的类型，Web 浏览器会执行 *simple* 或 *preflighted* 请求。 **图 8.4** 中的请求是一个简单的请求。
 
-![](Chapter8-TheWebStack.assets/Figure_8_4.png)
+![图 8.4 CORS 交互示例](Chapter8-TheWebStack.assets/Figure_8_4.png)
 
 相比之下，*PUT* 请求需要预检请求，因为它可能会产生副作用（*PUT* 意味着修改资源），因此必须对资源发出预检 *OPTIONS* HTTP 请求以检查 CORS 策略是，后跟实际的 *PUT* 请求（如果允许）。 预检请求提供更多详细信息，例如允许的 HTTP 标头和方法，因为例如，服务器可以具有禁止执行 *DELETE* 请求或在 HTTP 请求中具有 *ABC* 标头的 CORS 策略。 我建议阅读 Mozilla 的“跨源资源共享 (CORS)”文档 (http://mng.bz/X0Z6)，因为它提供了浏览器和服务器之间使用 CORS 的交互的详细且易于理解的解释。
 
@@ -240,13 +240,13 @@ Vert.x 带有一个带有 *CorsHandler* 类的即用型 CORS 处理程序。 创
 
 以下清单显示了如何在 Vert.x 路由器中安装 CORS 支持。
 
-![](Chapter8-TheWebStack.assets/Listing_8_17.png)
+![清单 8.17 在路由器中安装 CORS 支持](Chapter8-TheWebStack.assets/Listing_8_17.png)
 
 HTTP 方法是我们的 API 中支持的方法。 例如，您可以看到我们不支持 *DELETE*。 已为所有路由安装了 CORS 处理程序，因为它们都是 API 的一部分，并且应该可以从任何类型的应用程序（包括 Web 浏览器）访问。 允许的标头应该与您的 API 需要以及客户端可能传递的内容相匹配，例如指定内容类型，或者可以由代理注入并用于分布式跟踪目的的标头。
 
 我们可以通过向 API 支持的路由之一发出 HTTP *OPTIONS* 预检请求来检查是否正确支持 CORS。
 
-![](Chapter8-TheWebStack.assets/Listing_8_18.png)
+![清单 8.18 检查 CORS 支持](Chapter8-TheWebStack.assets/Listing_8_18.png)
 
 通过指定 *origin* HTTP 标头，CORS 处理程序在响应中插入 *access-control-allow-origin* HTTP 标头。 HTTP 状态码是 405，因为特定路由不支持 *OPTION* HTTP 方法，但这不是问题，因为 Web 浏览器在执行预检请求时只对 CORS 相关的标头感兴趣。
 
@@ -266,7 +266,7 @@ Vue.js 是一个现代 JavaScript 前端框架，如 React 或 Angular，用于�
 
 Vue.js 支持组件，其中 HTML 模板、CSS 样式和 JavaScript 代码可以组合在一起，如下面的清单所示。
 
-![](Chapter8-TheWebStack.assets/Listing_8_19.png)
+![清单 8.19 Vue.js 组件的画布](Chapter8-TheWebStack.assets/Listing_8_19.png)
 
 可以使用 Vue.js 命令行界面 (https://cli.vuejs.org/) 创建 Vue.js 项目：
 
@@ -289,13 +289,13 @@ $ vue create user-webapp
 
 Vue.js 路由器配置显示在以下清单中。
 
-![](Chapter8-TheWebStack.assets/Listing_8_20.png)
+![清单 8.20 Vue.js 路由器配置](Chapter8-TheWebStack.assets/Listing_8_20.png)
 
 应用程序代码与服务于用户 Web 应用程序的 Vert.x 应用程序位于同一模块中，因此您将在 `src/main/java` 和 *`Gradle build.gradle.kts`* 文件下找到常用的 Java 源文件 . 必须将 Vue.js 编译的资产 (*yarn build*) 复制到 `src/main/resources/webroot/assets` 以便基于 Vert.x 的服务为其提供服务。
 
 这使得单个项目中有两个构建工具，幸运的是它们可以和平共存。 事实上，从 Gradle 调用 *yarn* 非常容易，因为 *com.moowork.node* 的Gradle 插件提供了一个自包含的 Node 环境。 以下清单显示了用户 Web 应用程序 Gradle 构建文件的节点相关配置。
 
-![](Chapter8-TheWebStack.assets/Listing_8_21.png)
+![清单 8.21 使用 com.moowork.node Gradle 插件](Chapter8-TheWebStack.assets/Listing_8_21.png)
 
 *buildVueApp* 和 *copyVueDist* 任务作为常规项目构建任务的一部分插入，因此项目构建 Java Vert.x 代码和 Vue.js 代码。 我们还自定义了 *clean* 任务以删除生成的资产。
 
@@ -303,23 +303,23 @@ Vue.js 路由器配置显示在以下清单中。
 
 让我们看看其中一个 Vue.js 组件：如**图 8.5** 所示的登录屏幕。
 
-![](Chapter8-TheWebStack.assets/Figure_8_5.png)
+![图 8.5 登录界面截图](Chapter8-TheWebStack.assets/Figure_8_5.png)
 
 这个组件的文件是 `src/views/Login.vue`。 该组件显示登录表单，提交时必须调用公共 API 以获取 JWT 令牌。 成功后，它必须在本地存储 JWT 令牌，然后将视图切换到 *home* 组件。 出错时，它必须留在登录表单上并显示错误消息。
 
 组件的 HTML 模板部分显示在以下清单中。
 
-![](Chapter8-TheWebStack.assets/Listing_8_22.png)
+![清单 8.22 登录组件 HTML 模板](Chapter8-TheWebStack.assets/Listing_8_22.png)
 
 组件的 JavaScript 部分提供组件数据声明以及 *login* 方法实现。 我们使用 Axios JavaScript 库对公共 API 进行 HTTP 客户端调用。 以下清单提供了组件 JavaScript 代码。
 
-![](Chapter8-TheWebStack.assets/Listing_8_23.png)
+![清单 8.23 登录组件 JavaScript 代码](Chapter8-TheWebStack.assets/Listing_8_23.png)
 
 组件数据属性随着用户在用户名和密码字段中键入文本而更新，并且在表单提交时调用登录方法。 如果调用成功，应用程序将移动到 *home* 组件。
 
 下一个清单来自 *Home.vue* 组件的代码，它展示了如何使用 JWT 令牌来获取用户的总步数。
 
-![](Chapter8-TheWebStack.assets/Listing_8_24.png)
+![清单 8.24 在 Axios 中使用 JWT 令牌](Chapter8-TheWebStack.assets/Listing_8_24.png)
 
 现在让我们看看如何使用 Vert.x 为 Web 应用程序资产提供服务。
 
@@ -327,7 +327,7 @@ Vue.js 路由器配置显示在以下清单中。
 
 除了启动 HTTP 服务器和提供静态内容之外，Vert.x 代码没有太多工作要做。 以下清单显示了 *UserWebAppVerticle* 类的 *rxStart* 方法的内容。
 
-![](Chapter8-TheWebStack.assets/Listing_8_25.png)
+![清单 8.25 使用 Vert.x 提供静态内容](Chapter8-TheWebStack.assets/Listing_8_25.png)
 
 *StaticHandler* 将文件缓存在内存中，除非在调用 *create* 方法时另有配置。 禁用缓存在开发模式下很有用，因为您可以修改静态资产的内容并通过在 Web 浏览器中重新加载来查看更改，而无需重新启动 Vert.x 服务器。 默认情况下，静态文件是从类路径中的 webroot 文件夹解析的，但您可以像我们一样通过指定 `webroot/assets` 来覆盖它。
 
@@ -350,7 +350,7 @@ Vue.js 路由器配置显示在以下清单中。
 
 在这种情况下，我们将部署真正的服务，并且我们需要从 JUnit 5 以自包含和可重现的方式进行部署。 我们首先需要添加项目依赖项，如下面的清单所示。
 
-![](Chapter8-TheWebStack.assets/Listing_8_26.png)
+![清单 8.26 运行集成测试的测试依赖项](Chapter8-TheWebStack.assets/Listing_8_26.png)
 
 这些依赖项为我们带来了两个有用的工具来编写测试：
   - Testcontainers 是一个用于在 JUnit 测试中运行 Docker 容器的项目，因此我们将能够使用 PostgreSQL 或 Kafka ((http://www.testcontainers.org/)) 等基础设施服务。
@@ -358,37 +358,37 @@ Vue.js 路由器配置显示在以下清单中。
 
 测试类的序言如下表所示。
 
-![](Chapter8-TheWebStack.assets/Listing_8_27.png)
+![清单 8.27 集成测试类的序言](Chapter8-TheWebStack.assets/Listing_8_27.png)
 
 Testcontainers 为启动一个或多个容器提供了很多选择。 它支持通用 Docker 映像、通用基础设施（PostgreSQL、Apache Kafka 等）的专用类和 Docker Compose。 这里我们重用 Docker Compose 描述符来运行整个应用程序（*docker-compose.yml*），并且文件中描述的容器在第一个测试运行之前启动。 当所有测试执行完毕后，容器将被销毁。 这很有趣——我们可以针对将在生产中使用的真实基础设施服务编写集成测试。
 
 *prepareSpec* 方法带有 *@BeforeAll* 注释，用于准备测试。 它在 PostgreSQL 数据库中为活动服务插入一些数据，然后部署用户配置文件和活动 Verticle。 它还从 REST Assured 准备一个 *RequestSpecification* 对象，如下所示。
 
-![](Chapter8-TheWebStack.assets/Listing_8_28.png)
+![清单 8.28 准备一个 REST Assured 请求规范](Chapter8-TheWebStack.assets/Listing_8_28.png)
 
 该对象在所有测试方法之间共享，因为它们都必须向 API 发出请求。 我们启用了所有请求和响应的日志记录以便于调试，我们将 */api/v1* 设置为所有请求的基本路径。
 
 测试类维护用户的哈希映射以注册和稍后在调用中使用，以及 JWT 令牌的哈希映射。
 
-![](Chapter8-TheWebStack.assets/Listing_8_29.png)
+![清单 8.29 集成测试的实用哈希映射](Chapter8-TheWebStack.assets/Listing_8_29.png)
 
 以下清单是第一个测试，其中注册了来自 *registrations* 哈希映射的用户。
 
-![](Chapter8-TheWebStack.assets/Listing_8_30.png)
+![清单 8.30 注册用户测试](Chapter8-TheWebStack.assets/Listing_8_30.png)
 
 REST Assured fluent API 允许我们表达我们的请求，然后对响应进行断言。 可以将响应提取为文本或 JSON 以执行进一步的断言，如下一个清单所示，它是从检索 JWT 令牌的测试方法中提取的。
 
-![](Chapter8-TheWebStack.assets/Listing_8_31.png)
+![清单 8.31 检索 JWT 令牌的测试代码](Chapter8-TheWebStack.assets/Listing_8_31.png)
 
 测试获取一个标记，然后断言该标记既不是 *null* 值也不是空字符串（空或带有空格）。 提取 JSON 数据也是类似的，如下所示。
 
-![](Chapter8-TheWebStack.assets/Listing_8_32.png)
+![清单 8.32 使用 REST Assured 提取 JSON](Chapter8-TheWebStack.assets/Listing_8_32.png)
 
 测试获取用户 Foo 的总步数，提取 JSON 响应，然后检查步数（JSON 响应中的计数键）是否等于 6255。
 
 集成测试可以使用 Gradle (`./gradlew :public-api:test`) 或从开发环境运行，如图 8.6 所示。
 
-![](Chapter8-TheWebStack.assets/Figure_8_6.png)
+![图 8.6 从 IntelliJ IDEA 运行集成测试](Chapter8-TheWebStack.assets/Figure_8_6.png)
 
 现在，您已经很好地理解了如何使用Vert.x web堆栈来公开端点和使用其他服务。下一章重点介绍Vert.x的消息和事件流堆栈。
 
