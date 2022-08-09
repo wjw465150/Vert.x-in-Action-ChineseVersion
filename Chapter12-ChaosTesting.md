@@ -1,6 +1,9 @@
 # 第十二章: Toward responsiveness with load and chaos testing  
 
+> 翻译: 白石(https://github.com/wjw465150/Vert.x-in-Action-ChineseVersion)
+
 **This chapter covers**
+
   - Simulating users with Locust
   - Load testing HTTP endpoints with Hey
   - Chaos testing with Pumba

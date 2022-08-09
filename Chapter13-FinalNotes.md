@@ -1,6 +1,9 @@
 # 第十三章: Final notes: Container-native Vert.x  
 
+> 翻译: 白石(https://github.com/wjw465150/Vert.x-in-Action-ChineseVersion)
+
 **This chapter covers**
+
   - Efficiently building container images with Jib
   - Configuring Vert.x clustering to work in a Kubernetes cluster
   - Deploying Vert.x services to a Kubernetes cluster
