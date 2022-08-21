@@ -72,7 +72,7 @@ Vert.x 为 Apache Kafka 提供支持，这是一种流行的事件流中间件�
 
 **图 9.1** 显示了设备、收集步骤事件的 AMQP 队列和摄取服务之间的交互。
 
-![](Chapter9-MessagingAndEvent.assets/Figure_9_1.png)
+![图 9.1 AMQP 队列概述](Chapter9-MessagingAndEvent.assets/Figure_9_1.png)
 
 消息可以被设置为 **持久**，以便在代理崩溃时它们不会丢失。生产者和消费者可以使用*确认*来确保消息已正确发送或检索并处理。代理还提供各种服务质量特性，例如过期日期和高级路由。根据代理的不同，消息可以从一种表示形式转换为另一种表示形式，例如从二进制格式转换为JSON格式。一些代理还支持将多个消息聚合为一个消息，或者相反地将一个消息分解为多个消息。
 
@@ -90,7 +90,7 @@ Kafka 支持分布式服务之间的发布/订阅交互，如**图 9.2** 所示�
 
 在消息代理中，消息在从队列中被使用或过期时消失。 Kafka 分区最终会驱逐记录，要么使用分区大小限制（例如 2 GB），要么使用一些驱逐延迟（例如两周）。
 
-![](Chapter9-MessagingAndEvent.assets/Figure_9_2.png)
+![图 9.2 Kafka 主题概览](Chapter9-MessagingAndEvent.assets/Figure_9_2.png)
 
 Kafka 记录应该被认为是“半耐用的”，因为它们最终会消失。 可以将主题中的分区配置为永久保留事件，但这非常罕见，因为预计事件在使用时会产生持久的影响。 例如，摄取服务生成传入的步骤更新记录，活动服务将这些记录转换为数据库中的长期事实。 Kakfa 的另一个有趣的特性是可以随意重播主题，因此新服务可以按照自己的节奏加入和消费流。
 
@@ -112,25 +112,25 @@ Kafka 记录应该被认为是“半耐用的”，因为它们最终会消失�
 
 我们将从 AMQP 摄取开始。 我们首先需要创建一个连接到代理的 AMQP 客户端。 以下清单显示了客户端配置代码。
 
-![](Chapter9-MessagingAndEvent.assets/Listing_9_1.png)
+![清单 9.1 AMQP 客户端配置](Chapter9-MessagingAndEvent.assets/Listing_9_1.png)
 
 我们在此处使用的 *amqpConfig* 方法提供了带有硬编码值的配置。 这对于我们在本书中所做的测试非常有用，但对于生产环境，您当然会从一些外部来源解析凭据、主机名和端口号。 这些可能是环境变量或注册表服务，例如 Apache ZooKeeper 或 Consul。 我们还为持久消息传递设置连接并声明手动确认，因为如果写入 Kafka 主题失败，我们希望重试消息处理。
 
 下一步是为传入的 AMQP 消息设置事件处理管道。 我们使用 RxJava 将消息发送到处理函数、记录错误并从错误中恢复，如下面的清单所示。
 
-![](Chapter9-MessagingAndEvent.assets/Listing_9_2.png)
+![清单 9.2 AMQP 事件处理管道](Chapter9-MessagingAndEvent.assets/Listing_9_2.png)
 
 这个管道很有趣，因为它纯粹是声明性的。 它从创建客户端开始，然后为 *step-events* 持久队列和消息流获取接收器。 从那里我们声明在收到消息或错误时要做什么。 我们还通过使用 Java 方法引用而不是 lambda 来保持代码简洁明了。 但是 *logAmqpError*、*retryLater* 和 *handleAmqpMessage* 方法是做什么的？
 
 记录消息并不复杂。
 
-![](Chapter9-MessagingAndEvent.assets/Listing_9_3.png)
+![清单 9.3 记录 AMQP 错误](Chapter9-MessagingAndEvent.assets/Listing_9_3.png)
 
 发生错误。 例如，我们可能会失去与 AMQP 代理的连接。 在这种情况下，错误会沿着管道传递，*logAmqpError* 会记录它，但 *doOnError* 会让错误传播给订阅者。
 
 然后我们需要重试连接到 AMQP 代理并恢复接收事件，这意味着重新订阅 RxJava 中的源。 我们可以使用 *retryWhen* 运算符来做到这一点，因为它允许我们定义自己的策略。 如果您只想重试多次，甚至总是重试，那么 *retry* 会更简单。 以下清单显示了我们如何在重新订阅之前引入 10 秒延迟。
 
-![](Chapter9-MessagingAndEvent.assets/Listing_9_4.png)
+![清单 9.4 通过延迟重新订阅从错误中恢复](Chapter9-MessagingAndEvent.assets/Listing_9_4.png)
 
 *retryLater* 运算符的工作原理如下：
   - 它以 *Flowable* 的错误作为输入，因为我们处于 *Flowable* 的 AMQP 消息中。
@@ -144,7 +144,7 @@ Kafka 记录应该被认为是“半耐用的”，因为它们最终会消失�
 
 以下清单包含处理传入 AMQP 消息、验证它们，然后将它们作为 Kafka 记录推送的方法。
 
-![](Chapter9-MessagingAndEvent.assets/Listing_9_5.png)
+![清单 9.5 处理 AMQP 消息](Chapter9-MessagingAndEvent.assets/Listing_9_5.png)
 
 *handleAmqpMessage* 方法首先对传入的 AMQP 消息执行一些验证，然后准备 Kafka 记录。 AMQP 消息在 Kafka 记录被写入时被确认，如果记录不能被写入则被拒绝。
 
@@ -152,17 +152,17 @@ Kafka 记录应该被认为是“半耐用的”，因为它们最终会消失�
 
 *invalidIngestedJson* 方法检查 JSON 数据是否包含所有必需的条目，如下所示。
 
-![](Chapter9-MessagingAndEvent.assets/Listing_9_6.png)
+![清单 9.6 检查有效的 JSON 数据](Chapter9-MessagingAndEvent.assets/Listing_9_6.png)
 
 以下清单中的 *makeKafkaRecord* 方法将 AMQP 消息 JSON 转换为针对 *incoming-steps* 主题的 Kafka 记录。
 
-![](Chapter9-MessagingAndEvent.assets/Listing_9_7.png)
+![清单 9.7 准备 Kafka 记录](Chapter9-MessagingAndEvent.assets/Listing_9_7.png)
 
 我们可以避免手动复制所有 JSON 条目，只需将 JSON 从 AMQP 消息传递到 Kafka 记录。 但是，这有助于确保 Kafka 记录中没有额外的数据。
 
 *updateProducer* 字段的类型为 *KafkaProducer<String, JsonObject>*，因为它生成带有字符串键和 JSON 有效负载的消息。 *KafkaProducer* 的实例是通过从 Map 传递配置来创建的，如下所示。
 
-![](Chapter9-MessagingAndEvent.assets/Listing_9_8.png)
+![清单 9.8 配置一个 Kafka 生产者](Chapter9-MessagingAndEvent.assets/Listing_9_8.png)
 
 该配置特别指定了 *serializer*（或 *deserializer*）类，因为 Kafka 记录需要映射到 Java 类型。 *StringSerializer* 来自 Kafka 客户端库，它将 Java 字符串序列化为 Kafka 数据，而 *JsonObjectSerializer* 来自 Vert.x 并序列化 *JsonObject* 数据。 您需要为您的键和值指定正确的序列化程序类。 同样，在读取 Kafka 主题时，您将需要配置反序列化器。
 
@@ -174,11 +174,11 @@ Kafka 记录应该被认为是“半耐用的”，因为它们最终会消失�
 
 我们首先需要一个 HTTP 服务器和路由器。
 
-![](Chapter9-MessagingAndEvent.assets/Listing_9_9.png)
+![清单 9.9 用于摄取的 HTTP 服务器](Chapter9-MessagingAndEvent.assets/Listing_9_9.png)
 
 *httpIngest* 方法显示在下一个清单中，它与 *handleAmqpMessage* 非常相似。
 
-![](Chapter9-MessagingAndEvent.assets/Listing_9_10.png)
+![Listing 9.10 Ingesting updates from HTTP  ](Chapter9-MessagingAndEvent.assets/Listing_9_10.png)
 
 HTTP 状态代码对于让客户端知道有效负载是否不正确（400）、摄取是否由于某些（临时）错误（500）或摄取成功（200）非常重要。
 
@@ -201,7 +201,7 @@ Kafka 记录也有一个键，它是几个参数的串联：*deviceId:year-month
 
 每日步数事件处理流程如**图 9.3** 所示。
 
-![](Chapter9-MessagingAndEvent.assets/Figure_9_3.png)
+![图 9.3 从每日步数到祝贺电子邮件的管道](Chapter9-MessagingAndEvent.assets/Figure_9_3.png)
 
 每日步骤更新来自 *daily.step.updates* Kafka 主题，然后
   1. 我们丢弃步数小于 10,000 的事件。
@@ -210,11 +210,11 @@ Kafka 记录也有一个键，它是几个参数的串联：*deviceId:year-month
 
 以下清单包含相应的 RxJava 管道。
 
-![](Chapter9-MessagingAndEvent.assets/Listing_9_11.png)
+![清单 9.11 用于接收和处理每日步骤更新的 Kafka RxJava 管道](Chapter9-MessagingAndEvent.assets/Listing_9_11.png)
 
 上面的清单使用 RxJava 绑定来订阅 Kafka 主题，作为 Kafka 记录的 *Flowable*。 然后我们使用过滤器组合器*过滤*出少于 10,000 步的记录，并使用以下清单中的谓词方法。
 
-![](Chapter9-MessagingAndEvent.assets/Listing_9_12.png)
+![清单 9.12 至少有 10,000 步的事件的谓词](Chapter9-MessagingAndEvent.assets/Listing_9_12.png)
 
 **清单 9.11** 中的 *distinct* 组合器确保每个 Kafka 记录键仅保留一个事件，就在 *filter* 之后。 这是为了避免在给定的一天向用户发送多个祝贺电子邮件，因为我们可以很容易地进行第一个事件，例如 10,100 步，然后再进行另一个 10,600 步的事件，依此类推。 请注意，此设计不是 100% 防弹的，因为它需要将已处理的键值存储在内存中，并且在服务重新启动时，我们可能会不小心发送第二封电子邮件。 在我们的示例中，这是一个合理的权衡，与使用持久数据存储只是为了跟踪电子邮件上次发送给用户的时间相比。
 
@@ -224,13 +224,13 @@ Kafka 记录也有一个键，它是几个参数的串联：*deviceId:year-month
 
 *vertx-mail-client* 模块提供了一个 SMTP 客户端。 以下清单显示了如何创建这样的客户端。
 
-![](Chapter9-MessagingAndEvent.assets/Listing_9_13.png)
+![清单 9.13 创建一个 SMTP 客户端](Chapter9-MessagingAndEvent.assets/Listing_9_13.png)
 
 与许多其他 Vert.x 客户端一样，我们通过工厂方法获取实例，传递 *Vertx* 上下文以及一些参数。
 
 *MailerConfig* 类提供了一种检索配置数据的方法，如下所示。
 
-![](Chapter9-MessagingAndEvent.assets/Listing_9_14.png)
+![清单 9.14 邮件客户端配置](Chapter9-MessagingAndEvent.assets/Listing_9_14.png)
 
 同样，这些硬编码值可用于测试目的并保持我们的代码简单。 这些值用于连接到 MailHog，这是我们从 Docker 容器中使用的测试 SMTP 服务器。 *MailConfig* 类支持更多配置选项，如 SSL、身份验证方法、凭据等。
 
@@ -240,19 +240,19 @@ Kafka 记录也有一个键，它是几个参数的串联：*deviceId:year-month
 
 *sendmail* 方法如下表所示。
 
-![](Chapter9-MessagingAndEvent.assets/Listing_9_15.png)
+![清单 9.15 sendmail 方法的实现](Chapter9-MessagingAndEvent.assets/Listing_9_15.png)
 
 *sendmail* 方法是另一个组成异步操作和数据处理的 RxJava 管道，如**图 9.4** 所示。
 
-![](Chapter9-MessagingAndEvent.assets/Figure_9_4.png)
+![图 9.4 异步操作准备然后发送祝贺邮件](Chapter9-MessagingAndEvent.assets/Figure_9_4.png)
 
 它首先向用户配置文件服务发出 HTTP 请求并查找设备所有者的用户名。 然后它准备另一个请求来获取用户配置文件数据以获取电子邮件地址。 下面的清单提供了 *getEmail* 方法的实现。
 
-![](Chapter9-MessagingAndEvent.assets/Listing_9_16.png)
+![清单 9.16 请求检索电子邮件地址](Chapter9-MessagingAndEvent.assets/Listing_9_16.png)
 
 下一步是准备一封包含在 *MailMessage* 实例中的电子邮件，如以下 *makeEmail* 方法的实现所示。
 
-![](Chapter9-MessagingAndEvent.assets/Listing_9_17.png)
+![清单 9.17 准备一封电子邮件](Chapter9-MessagingAndEvent.assets/Listing_9_17.png)
 
 请注意，对于更高级的电子邮件格式，您可以使用模板引擎而不是文本。
 
@@ -266,27 +266,27 @@ Kafka 记录也有一个键，它是几个参数的串联：*deviceId:year-month
 
 测试摄取服务需要通过 AMQP 或 HTTP 发送消息，然后检查是否已发出 Kafka 记录，如图 9.5 所示。
 
-![](Chapter9-MessagingAndEvent.assets/Figure_9_5.png)
+![图 9.5 摄取集成测试概览](Chapter9-MessagingAndEvent.assets/Figure_9_5.png)
 
 摄取服务源代码中的 *IntegrationTest* 类使用 JUnit 5 和 Docker 容器来启动 AMQP 代理、Apache Kafka 和 Apache ZooKeeper。 下面的清单显示了测试准备。
 
-![](Chapter9-MessagingAndEvent.assets/Listing_9_18.png)
+![清单 9.18 摄取测试准备](Chapter9-MessagingAndEvent.assets/Listing_9_18.png)
 
 准备工作包括部署 *IngesterVerticle* verticle，然后删除任何现有的 *incoming.steps* 主题。 这确保了测试不会因剩余的 Kafka 事件而相互污染。 注意 *onErrorComplete* 组合子：它确保进度，因为删除主题不存在时会引发错误。 我们希望在 *incoming.steps* 不存在时运行测试，这通常是运行第一个测试的情况。 当然，*onErrorComplete* 可以掩盖 *IngesterVerticle* 的部署失败，但我们会在测试执行中发现这一点。
 
 下面的清单显示了测试用例的序言，其中提取了格式良好的 AMQP 消息。
 
-![](Chapter9-MessagingAndEvent.assets/Listing_9_19.png)
+![清单 9.19 AMQP 摄取测试序言](Chapter9-MessagingAndEvent.assets/Listing_9_19.png)
 
 AMQP 客户端发送一条我们知道格式正确的消息，因为它的主体包含所有必需的 JSON 条目。
 
 完成此操作后，我们需要检查是否已发送 Kafka 记录，如下所示。
 
-![](Chapter9-MessagingAndEvent.assets/Listing_9_20.png)
+![清单 9.20 AMQP 摄取测试：检查 Kafka 记录](Chapter9-MessagingAndEvent.assets/Listing_9_20.png)
 
 当然，我们还需要测试发送错误消息时会发生什么，比如一个空的 JSON 文档。 我们必须检查是否没有发出 Kafka 记录，如下面的清单所示。
 
-![](Chapter9-MessagingAndEvent.assets/Listing_9_21.png)
+![清单 9.21 摄取错误的 JSON 文档](Chapter9-MessagingAndEvent.assets/Listing_9_21.png)
 
 RxJava 管道中的超时很重要，因为我们需要等待一段时间以确保没有发送 Kafka 记录。 *IntegrationTest* 类的其余部分非常相似，有两个用于 HTTP 摄取的测试用例：一个检查发送正确有效负载时会发生什么，一个有效负载是空的 JSON 文档。
 
@@ -296,27 +296,27 @@ RxJava 管道中的超时很重要，因为我们需要等待一段时间以确�
 
 目标是发送 Kafka 记录，然后观察已发送（或未发送）的电子邮件。 有趣的是，MailHog 不仅仅是一个 SMTP 服务器； 它还提供了一个 Web 界面和一个 HTTP API 来模拟电子邮件收件箱。 这允许我们通过发送 Kafka 记录来执行测试，然后检查收件箱中收到了哪些电子邮件。
 
-![](Chapter9-MessagingAndEvent.assets/Figure_9_6.png)
+![图 9.6 祝贺服务集成-测试概览](Chapter9-MessagingAndEvent.assets/Figure_9_6.png)
 
 *CongratsTest* 类具有一个准备初始化方法，该方法创建一个 Kafka 生产者（用于发送 Kafka 事件）和一个 Vert.x Web 客户端（用于查询收件箱）。 *prepare* 方法中准备环境的步骤如下表所示。
 
-![](Chapter9-MessagingAndEvent.assets/Listing_9_22.png)
+![清单 9.22 准备祝贺服务集成测试](Chapter9-MessagingAndEvent.assets/Listing_9_22.png)
 
 我们首先删除现有的 Kafka 主题，然后部署待测 Verticle。 我们还部署了一个 verticle 来模拟用户配置文件服务，并通过对 MailHog 实例进行 HTTP *DELETE* 查询来删除收件箱中的所有消息。
 
 在测试源中发现的 *FakeUserService* verticle 公开了一个具有最低功能级别的 HTTP 服务，以替换我们测试中的真实用户配置文件服务。 找出谁拥有设备的所有请求都指向用户 *Foo*，检索用户 *Foo* 的详细信息只提供用户名和电子邮件。 以下清单显示了一个代码摘录，其中包含用于回答用户详细信息请求的代码，其中包含用户 *Foo* 的信息以及 *CongratsVerticle* 运行所需的 JSON 条目。
 
-![](Chapter9-MessagingAndEvent.assets/Listing_9_23.png)
+![清单 9.23 FakeUserService 类的摘录](Chapter9-MessagingAndEvent.assets/Listing_9_23.png)
 
 这样我们就有很好的隔离了祝贺服务进行测试。 我们也可以部署真正的用户配置文件服务，但这需要准备一个包含一些数据的数据库。 如果可以，最好用模拟服务替换依赖服务。
 
 下一个清单显示了完整的测试用例，用于检查在少于 10,000 步的 Kafka 记录上没有发送电子邮件。
 
-![](Chapter9-MessagingAndEvent.assets/Listing_9_24.png)
+![清单 9.24 检查是否在少于 10,000 步的时间内没有发送邮件](Chapter9-MessagingAndEvent.assets/Listing_9_24.png)
 
 MailHog API 允许我们检查已发送的消息。 下一个清单检查是否发送了超过 10,000 步的电子邮件。
 
-![](Chapter9-MessagingAndEvent.assets/Listing_9_25.png)
+![清单 9.25 检查是否发送了超过 10,000 步的电子邮件](Chapter9-MessagingAndEvent.assets/Listing_9_25.png)
 
 *checkNotTwiceToday* 方法中的最后一个测试用例检查是否只针对超过 10,000 步的两条连续记录发送了一封电子邮件。 由于代码冗长，我没有在此处复制代码，但您可以从本书的源代码存储库中获取它。
 

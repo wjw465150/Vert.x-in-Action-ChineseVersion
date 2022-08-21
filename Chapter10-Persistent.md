@@ -352,7 +352,7 @@ MongoDB 非常适合这里，因为它是一个文档数据库； 每个用户�
 
 另一个例子是下面的测试，我们检查当我们尝试注册用户两次时会发生什么。
 
-![Listing 10.30 Test for registering a user twice  ](Chapter10-Persistent.assets/Listing_10_30.png)
+![清单 10.30 注册用户两次的测试](Chapter10-Persistent.assets/Listing_10_30.png)
 
 我们还可以查看数据库并检查每个操作后存储的数据。 由于我们需要涵盖 HTTP API 的所有功能案例，因此在集成测试中只关注 HTTP API 会更直接。 但是，在某些情况下，数据库之上的 API 可能不会让您接触到对存储数据的一些重要影响，在这些情况下，您需要连接到数据库以进行一些进一步的断言。
 

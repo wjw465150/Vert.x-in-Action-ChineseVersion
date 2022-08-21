@@ -68,7 +68,7 @@ Locust是一种通过模拟与服务交互的用户来生成工作负载的工�
       **三.** 用户获取它的总步数(请求的5%)。
       **四.** 用户获取当天的步数(10%的请求)。
 
-![Figure 12.1 Activity of a simulated user in Locust](Chapter12-ChaosTesting.assets/Figure_12_1.png)
+![图 12.1 Locust 中模拟用户的活动](Chapter12-ChaosTesting.assets/Figure_12_1.png)
 
 此活动涵盖了大多数服务：在大多数服务之间摄入触发器事件交换，而API查询触发了对活动和用户配置文件服务的调用。
 
@@ -84,13 +84,13 @@ Locust是一种通过模拟与服务交互的用户来生成工作负载的工�
 
 下面的清单显示了执行初始热身运行的命令。
 
-![Listing 12.1 Locust warm-up run](Chapter12-ChaosTesting.assets/Listing_12_1.png)
+![清单 12.1 Locust 热身](Chapter12-ChaosTesting.assets/Listing_12_1.png)
 
 进行这样的预热运行是很重要的，因为运行各种服务的JVM在开始高效运行代码之前需要有一些工作负载。在此之后，您可以运行一个更大的工作负载，以获得服务运行情况的初步估计。
 
 下面的清单显示了使用150个客户端运行5分钟测试的命令，孵化速率为每秒2个新用户。
 
-![Listing 12.2 Locust run](Chapter12-ChaosTesting.assets/Listing_12_2.png)
+![清单 12.2 Locust 运行](Chapter12-ChaosTesting.assets/Listing_12_2.png)
 
 让我们进行实验并收集结果。我们将获得每种请求类型的各种指标，例如平均响应时间、最小/最大时间、中值时间等等。一个有趣的指标是给定百分比的延迟。
 
@@ -128,17 +128,17 @@ Hey是一个比Locust简单得多的工具，因为它不能运行脚本，而�
 
 由于Hey不能运行脚本，我们必须专注于一个用户，并在shell脚本中封装对Hey的调用。您将在 *part2-steps-challenge/load-testing* 文件夹中找到帮助脚本。第一个脚本是*create-user.sh*，如下清单所示。
 
-![Listing 12.3 Script to create a user](Chapter12-ChaosTesting.assets/Listing_12_3.png)
+![清单 12.3 创建用户的脚本](Chapter12-ChaosTesting.assets/Listing_12_3.png)
 
 这个脚本确保创建了用户 *loadtesting-user*，并记录了一些更新。
 
 下面清单中显示的 *run-hey-user-steps.sh* 脚本使用Hey并获取用户 *loadtesting-user* 的总步骤数。
 
-![Listing 12.4 Script to run Hey and load test for getting a user’s total step count](Chapter12-ChaosTesting.assets/Listing_12_4.png)
+![清单 12.4 运行 Hey 和负载测试以获取用户总步数的脚本](Chapter12-ChaosTesting.assets/Listing_12_4.png)
 
 下面清单中的 *run-hey-token.sh* 脚本与此类似，它执行一个身份验证请求以获得JWT令牌。
 
-![Listing 12.5 Script to run Hey and load test getting a JWT token  ](Chapter12-ChaosTesting.assets/Listing_12_5.png)
+![清单 12.5 运行 Hey 和负载测试获取 JWT 令牌的脚本](Chapter12-ChaosTesting.assets/Listing_12_5.png)
 
 现在我们准备对用户的总步数端点执行一次运行。在我的例子中，我使用第二台笔记本电脑进行实验，而我的主笔记本电脑运行服务，在运行测试时其IP地址为192.168.0.23。首先，我们将使用Locust获得一些轻微的背景工作负载，再次确保系统不会完全空闲:
 
@@ -221,23 +221,23 @@ Pumba是一个非常方便的工具，您可以下载并在您的机器上运行
 
 在本地运行1万步的应用程序后，让我们使用Pumba并为MongoDB数据库流量添加一些延迟。让我们用 *load-testing/fetch-token.sh* 脚本获取一个JWT令牌，如下所示。
 
-![Listing 12.6 Fetching a JWT token](Chapter12-ChaosTesting.assets/Listing_12_6.png)
+![清单 12.6 获取 JWT 令牌](Chapter12-ChaosTesting.assets/Listing_12_6.png)
 
 在另一个终端中，让我们引入以下命令的延迟。
 
-![Listing 12.7 Introducing some network delays with Pumba](Chapter12-ChaosTesting.assets/Listing_12_7.png)
+![清单 12.7 使用 Pumba 引入一些网络延迟](Chapter12-ChaosTesting.assets/Listing_12_7.png)
 
 Pumba 现在应该能跑一分钟了。再次尝试获取JWT令牌;该命令显然应该比以前花费更多的时间，如下面的清单所示。
 
-![Listing 12.8 Fetching a token with network delays](Chapter12-ChaosTesting.assets/Listing_12_8.png)
+![清单 12.8 获取具有网络延迟的令牌](Chapter12-ChaosTesting.assets/Listing_12_8.png)
 
 由于等待I/O，该过程花费了6.157秒才能获取令牌。 同样，您可以使用以下命令停止容器。
 
-![Listing 12.9 Stopping a container with Pumba](Chapter12-ChaosTesting.assets/Listing_12_9.png)
+![清单 12.9 使用 Pumba 停止容器](Chapter12-ChaosTesting.assets/Listing_12_9.png)
 
 如果您再次运行脚本获取令牌，您将等待，而在日志中您将看到一些由于MongoDB容器关闭而导致的错误，如下所示。
 
-![Listing 12.10 Fetching a token with a stopped database server](Chapter12-ChaosTesting.assets/Listing_12_10.png)
+![清单 12.10 使用停止的数据库服务器获取令牌](Chapter12-ChaosTesting.assets/Listing_12_10.png)
 
 服务现在没有响应。我的请求花了57.315秒完成，因为它必须等待数据库回来。
 
@@ -257,7 +257,7 @@ Pumba 现在应该能跑一分钟了。再次尝试获取JWT令牌;该命令显�
 
 在数据库宕机的阶段，我们会看到整个模拟宕机期间的错误。虽然我们很难对错误感到惊讶，但我们可以看到，这个系统也没有停止。然而，这还远远不够完美，因为吞吐量下降是一个信号，表明请求需要 *一些* 时间来给出错误，而其他请求正在等待，直到他们超时，或他们最终完成时数据库重新启动。
 
-![Figure 12.7 JWT token load test with failures](Chapter12-ChaosTesting.assets/Figure_12_7.png)
+![图 12.7 失败的 JWT 令牌负载测试](Chapter12-ChaosTesting.assets/Figure_12_7.png)
 
 现在让我们看看 **图12.7**，看看如何获取JWT令牌。
 
@@ -277,7 +277,7 @@ Pumba 现在应该能跑一分钟了。再次尝试获取JWT令牌;该命令显�
 
 >  **💡提示:** 您可以在Git存储库的*chapter12/publicapi-with-timeout *分支中找到相应的代码更改。
 
-![Listing 12.11 Implementation of the totalSteps method with timeouts](Chapter12-ChaosTesting.assets/Listing_12_11.png)
+![清单 12.11 带有超时的 totalSteps 方法的实现](Chapter12-ChaosTesting.assets/Listing_12_11.png)
 
 在 *fetchUserDetails* 和 *token* 方法中的变化是相同的。5秒的超时相对较短，可以确保快速通知错误。
 
@@ -290,7 +290,7 @@ Pumba 现在应该能跑一分钟了。再次尝试获取JWT令牌;该命令显�
 
 现在让我们看看JWT令牌负载测试的行为，如 **图12.9** 所示。这次运行确认了我们所观察到的情况:强制执行超时，确保在故障期间仍能处理一些请求。但是，最坏情况下的延迟比没有超时时更糟糕:网络延迟延长了对用户配置文件服务执行两个HTTP请求的时间，因此较高的值对应于第二个请求超时的请求。
 
-![Figure 12.9 JWT token load test with failures and timeouts](Chapter12-ChaosTesting.assets/Figure_12_9.png)
+![图 12.9 带有失败和超时的 JWT 令牌负载测试](Chapter12-ChaosTesting.assets/Figure_12_9.png)
 
 在提高响应性方面，超时总比没有超时要好，但我们不能把我们的公共API服务定义为弹性服务。我们需要的是一种让服务“知道”发生了故障的方法，这样它就能快速失败，而不是等待超时发生。这就是断路器的作用!
 
@@ -300,7 +300,7 @@ Pumba 现在应该能跑一分钟了。再次尝试获取JWT令牌;该命令显�
 
 图12.10显示了断路器作为有限状态机的工作原理。这个想法很简单。断路器在闭合状态启动，对每一个请求，观察请求是否成功。失败可能是因为报告了错误(例如，TCP超时或TCP连接错误)，或因为操作花费了太长时间才完成。
 
-![igure 12.10 Circuit breaker state machine](Chapter12-ChaosTesting.assets/Figure_12_10.png)
+![图 12.10 断路器状态机](Chapter12-ChaosTesting.assets/Figure_12_10.png)
 
 一旦报告了一定数量的错误，断路器就进入开路状态。从这里开始，所有操作都将被通知由于电路打开而导致的故障。这避免了进一步向没有响应的服务发出请求，从而允许快速错误响应、尝试替代恢复策略，并减少服务端和请求端压力。
 
@@ -310,25 +310,25 @@ Pumba 现在应该能跑一分钟了。再次尝试获取JWT令牌;该命令显�
 
 Vert.x提供了 *Vertx -circuit-breaker* 模块，需要添加到公共API项目中。我们将使用两个断路器:一个用于令牌生成请求，另一个用于调用活动服务(例如获取用户的总步骤数)。下面的清单显示了在 *PublicApiVerticlerxStart* 方法中创建断路器的代码。
 
-![Listing 12.12 Creating a circuit breaker](Chapter12-ChaosTesting.assets/Listing_12_12.png)
+![清单 12.12 创建一个断路器](Chapter12-ChaosTesting.assets/Listing_12_12.png)
 
 *tokenCircuitBreakerName* 引用是 *CircuitBreaker* 类型的字段。 活动服务断路器还有另一个名为 *activityCircuitBreaker* 的字段，代码相同。 状态变化的回调可以有选择地设置。记录这些状态变化以用于诊断是一个好主意。
 
 下面的清单显示了一个断路器配置。
 
-![Listing 12.13 Configuring a circuit breaker](Chapter12-ChaosTesting.assets/Listing_12_13.png)
+![清单 12.13 配置断路器](Chapter12-ChaosTesting.assets/Listing_12_13.png)
 
 我们将在5次故障后打开断路器，包括5秒后操作超时(与之前的实验一致)。重置超时设置为10秒，这将让我们经常检查服务如何运行。这个值的长度应该取决于您的上下文，但是您可以预期，长超时将增加服务在降级模式下运行的时间或报告错误，而短超时可能会降低使用断路器的有效性。
 
 下面的清单显示了修改后的令牌方法，其中的代码封装在一个断路器调用中。
 
-![Listing 12.14 Implementation of the token method with a circuit breaker](Chapter12-ChaosTesting.assets/Listing_12_14.png)
+![清单 12.14 使用断路器实现令牌方法](Chapter12-ChaosTesting.assets/Listing_12_14.png)
 
 断路器执行一个操作，此处正在向用户配置文件服务提出两个HTTP请求，然后制作JWT令牌。 操作的结果是JWT令牌值的 *Single<String>*。 执行方法向包装的代码传递一个承诺，因此它可以通知操作是否成功。
 
 必须按照以下清单修改 *handleAuthError* 方法，以检查任何错误的来源。
 
-![Listing 12.15 Handling authentication errors](Chapter12-ChaosTesting.assets/Listing_12_15.png)
+![清单 12.15 处理认证错误](Chapter12-ChaosTesting.assets/Listing_12_15.png)
 
 断路器报告了开路条件和操作超时，具有专用例外。 在这些情况下，我们报告了HTTP 500状态代码或经典401，以便请求者知道失败是否是由于错误的凭据。
 
@@ -338,7 +338,7 @@ Vert.x提供了 *Vertx -circuit-breaker* 模块，需要添加到公共API项目
 
 这一切都很好，但是如何获取用户的总步数呢？
 
-![Figure 12.11 JTW token load testing with failures and a circuit breaker](Chapter12-ChaosTesting.assets/Figure_12_11.png)
+![图 12.11 带有故障和断路器的 JWT 令牌负载测试](Chapter12-ChaosTesting.assets/Figure_12_11.png)
 
 ### 12.3.3 弹性和后备策略
 
@@ -350,19 +350,19 @@ Vert.x提供了 *Vertx -circuit-breaker* 模块，需要添加到公共API项目
 
 下面的清单展示了如何创建最多10,000个条目的缓存，其中键是字符串，值是长整数。
 
-![Listing 12.16 Creating a cache](Chapter12-ChaosTesting.assets/Listing_12_16.png)
+![清单 12.16 创建缓存](Chapter12-ChaosTesting.assets/Listing_12_16.png)
 
 在下面的列表中，我们使用*cacheTotalSteps*方法向缓存添加条目，当达到10,000条目的限制时，Caffeine会清除旧的条目。
 
-![Listing 12.17 Caching total steps](Chapter12-ChaosTesting.assets/Listing_12_17.png)
+![清单 12.17 缓存总步数](Chapter12-ChaosTesting.assets/Listing_12_17.png)
 
 前面的方法在*totalSteps*方法中使用，如下所示，其中的代码使用一个断路器调用进行了包装。
 
-![Listing 12.18 Implementation of the totalSteps method with a circuit breaker](Chapter12-ChaosTesting.assets/Listing_12_18.png)
+![清单 12.18 使用断路器实现 totalSteps 方法](Chapter12-ChaosTesting.assets/Listing_12_18.png)
 
 我们现在使用一个不返回任何值的断路器，因此是 *Void* 参数类型。 *executeWithFallback* 方法允许我们在电路打开时提供回退，因此我们可以尝试从缓存中恢复值。 这是在以下清单中的 *tryToRecoverFromCache* 方法中完成的。
 
-![Listing 12.19 Implementation of the recovery from cache](Chapter12-ChaosTesting.assets/Listing_12_19.png)
+![清单 12.19 从缓存中恢复的实现](Chapter12-ChaosTesting.assets/Listing_12_19.png)
 
 通过 *tryToRecoverFromCache* 方法从缓存中恢复，我们并不总是发送错误。 如果我们在缓存中有数据，我们仍然可以提供响应，尽管可能是过时的值。
 
@@ -374,11 +374,11 @@ Vert.x提供了 *Vertx -circuit-breaker* 模块，需要添加到公共API项目
 
 当数据库启动时，我们可以看到一个延迟峰值，因为错误变成了成功，然后服务能够名义上响应。 请注意，在第一个成功秒内，JVM 将开始优化与数据库对话的代码，因此提高了吞吐量。
 
-![Figure 12.12 Total step count load test with failures, a circuit breaker, and a cold start](Chapter12-ChaosTesting.assets/Figure_12_12.png)
+![图 12.12 带故障、断路器和冷启动的总步数负载测试](Chapter12-ChaosTesting.assets/Figure_12_12.png)
 
 图12.13显示了整个五分钟测试计划中的服务行为。由于测试计划从正常运行的数据库开始，所以服务为测试用户管理缓存数据。这就是为什么我们在整个运行过程中没有出现错误的原因。当网络延迟出现时，我们看到了一些延迟更高的成功案例，这实际上影响了99.99以上的最后几个百分点。这是由于断路器在发出HTTP请求时报告超时，但是请注意，断路器不能取消HTTP请求。因此，我们有一些HTTP请求等待一个没有响应的活动服务，而断路器同时用一些缓存的数据完成相应的HTTP响应。
 
-![Figure 12.13 Total step count load test with failures and a circuit breaker](Chapter12-ChaosTesting.assets/Figure_12_13.png)
+![图 12.13 带故障和断路器的总步数负载测试](Chapter12-ChaosTesting.assets/Figure_12_13.png)
 
 图12.14展示了在web客户端HTTP请求中结合断路器和5秒超时的效果(参见 *chapter12/public-api-with-circuitbreaker-and-timeout* 分支)。
 
@@ -386,7 +386,7 @@ Vert.x提供了 *Vertx -circuit-breaker* 模块，需要添加到公共API项目
 
 > **🏷注意:** 断路器是避免级联故障的非常有用的工具，但您不必将网络上的每个操作都封装在断路器中。每一种抽象都有成本，而断路器确实增加了一层间接。相反，最好使用混乱测试，并确定它们最有可能对整个系统行为产生积极影响的地方。
 
-![Figure 12.14 Total step count load test with failures, timeouts, and a circuit breaker](Chapter12-ChaosTesting.assets/Figure_12_13.png)
+![图 12.14 带有故障、超时和断路器的总步数负载测试](Chapter12-ChaosTesting.assets/Figure_12_13.png)
 
 我们现在有了一个响应式服务:它不仅资源高效、可伸缩，而且对故障也有弹性。服务在所有情况下都保持响应，延迟也得到了控制。
 
