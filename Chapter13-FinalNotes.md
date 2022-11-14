@@ -1,4 +1,4 @@
-# 第十三章: Final notes: Container-native Vert.x  
+# 第十三章: 最后说明：容器原生的Vert.x
 
 > 翻译: 白石(https://github.com/wjw465150/Vert.x-in-Action-ChineseVersion)
 
@@ -15,6 +15,12 @@
 这一章是可选的，因为这本书的核心目标是教会你自己反应式的概念和实践。尽管如此，Kubernetes仍然是一个流行的部署目标，并且值得学习如何使Vert.x应用程序在这种环境中成为一等公民。
 
 在本章中，我将假设你对容器、Docker和Kubernetes有一个基本的了解，这在其他书籍中有深入的介绍，如Marko Lukša的《*Kubernetes In Action*，第二版》(Manning, 2020)和Jeff Nickoloff和Stephen Kuenzli (Manning, 2019)的《*Docker In Action*》第二版。如果你不太了解这些主题，你应该仍然能够理解并运行本章中的示例，并且在此过程中你将学习一些Kubernetes的基础知识，但是我不会花时间解释Kubernetes的核心概念，比如*pods*和*services*，或者描述*kubectl*命令行工具的微妙之处。
+
+> **翻译者注释:** k8s中的思想是：每个容器只安装一个进程，然后多个或一个容器属于一个pod。然后这个pod下的容器可以通过volume的方式共享磁盘。也就是说，应该把整个pod看作虚拟机，然后每个容器相当于运行在虚拟机的进程。
+>
+> pod是应用程序的载体，我们可以通过pod的ip来访问应用程序，但是pod的ip地址不是固定的，这也就意味着不方便直接采用pod的ip对服务进行访问.为了解决这个问题，k8s提供了service资源，service会对提供同一个服务的多个pod进行聚合，并且提供一个统一的入口地址。通过访问service的入口地址就能访问到后面的pod服务
+
+
 
 > **工具版本**
 >

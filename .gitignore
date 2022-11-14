@@ -9,3 +9,13 @@
 /node_modules/
 
 /.project
+
+# IDE support files
+/.classpath
+/.launch
+/.project
+/.settings
+/*.launch
+/*.tmproj
+/ivy*
+/eclipse 

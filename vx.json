@@ -55,7 +55,7 @@
             "attachment_folder": "",
             "created_time": "2022-07-07T01:51:51Z",
             "id": "5423",
-            "modified_time": "2022-07-07T03:54:37Z",
+            "modified_time": "2022-11-14T13:32:31Z",
             "name": "Chapter1-Fundamentals.md",
             "signature": "177750817847",
             "tags": [
@@ -100,12 +100,29 @@
             "signature": "177754659154",
             "tags": [
             ]
+        },
+        {
+            "attachment_folder": "",
+            "created_time": "2022-09-14T08:20:32Z",
+            "id": "5439",
+            "modified_time": "2022-09-14T08:20:32Z",
+            "name": "Chapter12-ChaosTesting.md",
+            "signature": "79316824198864",
+            "tags": [
+            ]
+        },
+        {
+            "attachment_folder": "",
+            "created_time": "2022-11-20T01:55:51Z",
+            "id": "5468",
+            "modified_time": "2022-11-20T01:55:51Z",
+            "name": "Chapter8-TheWebStack.md",
+            "signature": "177762568487",
+            "tags": [
+            ]
         }
     ],
     "folders": [
-        {
-            "name": "Chapter3-EventBus.assets"
-        }
     ],
     "id": "5412",
     "modified_time": "2022-05-26T04:34:54Z",
